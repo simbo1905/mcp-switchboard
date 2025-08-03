@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
+  import { SpotlightSearchImpl, type ModelInfo } from '$lib/spotlight';
 
   let invoke: any;
   let listen: any;
@@ -23,6 +24,10 @@
   let showSetup = false;
   let setupApiKey = '';
   let currentModel = 'Loading...';
+  let currentMode = 'chat';
+  let spotlightVisible = false;
+  let spotlight = new SpotlightSearchImpl();
+  let commandTimeout: number;
 
   onMount(async () => {
     if (browser) {
@@ -51,6 +56,7 @@
 
       await setupListeners();
       await checkApiConfig();
+      await loadAvailableModels();
     }
   });
 
@@ -99,7 +105,7 @@
   }
 
   async function sendMessage() {
-    if (!inputMessage.trim() || isStreaming || !browser || !hasApiKey) return;
+    if (!inputMessage.trim() || isStreaming || !browser || !hasApiKey || spotlightVisible) return;
 
     const userMessage = { type: 'user' as const, content: inputMessage };
     messages = [...messages, userMessage];
@@ -109,11 +115,6 @@
     
     inputMessage = '';
 
-    // Check for chat commands
-    if (messageToSend.startsWith('/')) {
-      await handleChatCommand(messageToSend);
-      return;
-    }
     
     isStreaming = true;
 
@@ -191,17 +192,91 @@
       }];
     }
   }
+
+  function handleInputChange() {
+    if (inputMessage.startsWith('/') && !spotlightVisible && hasApiKey) {
+      // Clear any existing timeout
+      if (commandTimeout) {
+        clearTimeout(commandTimeout);
+      }
+      
+      // Set a delay before showing spotlight
+      commandTimeout = setTimeout(() => {
+        if (inputMessage.startsWith('/') && hasApiKey) {
+          showSpotlight();
+        }
+      }, 200);
+    } else if (!inputMessage.startsWith('/') && spotlightVisible) {
+      hideSpotlight();
+    }
+  }
+
+  function showSpotlight() {
+    spotlightVisible = true;
+    currentMode = 'command';
+    spotlight.input = inputMessage;
+    spotlight.updateCommandSuggestions();
+  }
+
+  function hideSpotlight() {
+    spotlightVisible = false;
+    currentMode = 'chat';
+    spotlight.reset();
+    if (commandTimeout) {
+      clearTimeout(commandTimeout);
+    }
+  }
+
+  async function loadAvailableModels() {
+    if (!invoke) return;
+    
+    try {
+      const models = await invoke('get_available_models');
+      spotlight.setAvailableModels(models);
+    } catch (error) {
+      console.error('Failed to load available models:', error);
+    }
+  }
+
+  function handleSpotlightKeydown(event: KeyboardEvent) {
+    switch (event.key) {
+      case 'Escape':
+        event.preventDefault();
+        hideSpotlight();
+        inputMessage = '';
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        spotlight.navigateDown();
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        spotlight.navigateUp();
+        break;
+      case 'Tab':
+        event.preventDefault();
+        spotlight.selectCurrent();
+        break;
+      case 'Enter':
+        event.preventDefault();
+        if (spotlight.suggestions.length > 0) {
+          executeSpotlightCommand(spotlight.suggestions[spotlight.selectedIndex]);
+        }
+        break;
+    }
+  }
+
+  async function executeSpotlightCommand(command: string) {
+    hideSpotlight();
+    inputMessage = '';
+    
+    // Execute the command
+    await handleChatCommand(command);
+  }
 </script>
 
 <div class="chat-interface">
   {#if hasApiKey}
-    <div class="chat-header">
-      <h3>🤖 MCP Switchboard</h3>
-      <div class="model-display">
-        <span class="model-label">Model:</span>
-        <span class="model-name">{currentModel}</span>
-      </div>
-    </div>
     <div class="messages">
       {#each messages as msg}
         <div class="message {msg.type}">
@@ -218,12 +293,18 @@
       <input
         bind:value={inputMessage}
         on:keypress={(e) => e.key === 'Enter' && sendMessage()}
+        on:input={handleInputChange}
         disabled={isStreaming}
         placeholder="Type your message..."
       />
       <button on:click={sendMessage} disabled={isStreaming}>
         Send
       </button>
+    </div>
+    <div class="status-bar">
+      <span class="left">mode: {currentMode}</span>
+      <span class="center">together.ai</span>
+      <span class="right">{currentModel}</span>
     </div>
   {:else}
     <div class="welcome">
@@ -235,6 +316,32 @@
     </div>
   {/if}
 </div>
+
+{#if spotlightVisible}
+  <div class="spotlight-overlay" on:click={hideSpotlight}>
+    <div class="spotlight-modal" on:click|stopPropagation>
+      <input
+        bind:value={spotlight.input}
+        on:keydown={handleSpotlightKeydown}
+        on:input={() => spotlight.updateCommandSuggestions()}
+        placeholder="Type command..."
+        autofocus
+      />
+      {#if spotlight.suggestions.length > 0}
+        <div class="suggestions">
+          {#each spotlight.suggestions as suggestion, index}
+            <div 
+              class="suggestion {index === spotlight.selectedIndex ? 'selected' : ''}"
+              on:click={() => executeSpotlightCommand(suggestion)}
+            >
+              {suggestion}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 {#if showSetup}
   <div class="modal-overlay">
@@ -315,45 +422,6 @@
     background-color: #0056b3;
   }
 
-  .chat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    border-bottom: 1px solid #ddd;
-    background-color: #f8f9fa;
-  }
-
-  .chat-header h3 {
-    margin: 0;
-    color: #333;
-    font-size: 18px;
-  }
-
-  .model-display {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-  }
-
-  .model-label {
-    color: #666;
-    font-weight: 500;
-  }
-
-  .model-name {
-    color: #007bff;
-    background-color: #e7f3ff;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-family: monospace;
-    font-size: 12px;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 
   .messages {
     flex-grow: 1;
@@ -408,6 +476,94 @@
   .input-area button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+  }
+
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 16px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #ddd;
+    font-size: 11px;
+    color: #666;
+    min-height: 20px;
+  }
+
+  .status-bar .left {
+    flex: 1;
+    text-align: left;
+  }
+
+  .status-bar .center {
+    flex: 1;
+    text-align: center;
+  }
+
+  .status-bar .right {
+    flex: 1;
+    text-align: right;
+    font-family: monospace;
+    color: #007bff;
+  }
+
+  .spotlight-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
+
+  .spotlight-modal {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 500px;
+    overflow: hidden;
+  }
+
+  .spotlight-modal input {
+    width: 100%;
+    border: none;
+    padding: 16px 20px;
+    font-size: 16px;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .suggestions {
+    border-top: 1px solid #eee;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .suggestion {
+    padding: 12px 20px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    font-family: monospace;
+    font-size: 14px;
+  }
+
+  .suggestion:hover,
+  .suggestion.selected {
+    background-color: #f8f9fa;
+  }
+
+  .suggestion.selected {
+    background-color: #e7f3ff;
+    color: #007bff;
+  }
+
+  .suggestion:last-child {
+    border-bottom: none;
   }
 
   .modal-overlay {
