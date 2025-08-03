@@ -42,13 +42,21 @@ async fn save_api_config(api_key: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn has_api_config() -> Result<bool, String> {
-    log::debug!("Frontend checking if API configuration exists");
+    log::info!("Frontend checking if API configuration exists");
+    log::info!("Current working directory: {:?}", std::env::current_dir());
+    log::info!("USER env var: {:?}", std::env::var("USER"));
+    
     let config_manager = ConfigManager::new().map_err(|e| {
         log::error!("Failed to create config manager: {}", e);
         e.to_string()
     })?;
+    
+    log::info!("Config file path: {:?}", config_manager.get_config_path());
+    log::info!("Config file exists: {}", config_manager.get_config_path().exists());
+    log::info!("Environment variable TOGETHERAI_API_KEY set: {}", std::env::var("TOGETHERAI_API_KEY").is_ok());
+    
     let has_config = config_manager.has_config();
-    log::debug!("API configuration exists: {}", has_config);
+    log::info!("Final has_config result: {}", has_config);
     Ok(has_config)
 }
 

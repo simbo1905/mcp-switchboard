@@ -27,3 +27,7 @@ base64 = "0.22"
 sha2 = "0.10"
 dirs = "5.0"
 anyhow = "1.0"
+gethostname = "0.4"
+
+[dev-dependencies]
+tempfile = "3.8"

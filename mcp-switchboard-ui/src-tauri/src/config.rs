@@ -1,17 +1,14 @@
-use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
-};
-use anyhow::{Context, Result};
-use base64::{engine::general_purpose, Engine as _};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::fs;
 use std::path::PathBuf;
+use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit};
+use aes_gcm::aead::{Aead, OsRng, AeadCore};
+use base64::{Engine as _, engine::general_purpose};
+use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use sha2::{Sha256, Digest};
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AppConfig {
-    pub together_ai_api_key: String,
+#[derive(Serialize, Deserialize)]
+struct AppConfig {
+    together_ai_api_key: String,
 }
 
 pub struct ConfigManager {
@@ -22,12 +19,12 @@ pub struct ConfigManager {
 impl ConfigManager {
     pub fn new() -> Result<Self> {
         let config_dir = dirs::config_dir()
-            .context("Could not determine config directory")?
+            .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?
             .join("mcp-switchboard");
-        
+
         let config_file = config_dir.join("config.json");
-        
-        Ok(Self {
+
+        Ok(ConfigManager {
             config_dir,
             config_file,
         })
@@ -58,6 +55,7 @@ impl ConfigManager {
             together_ai_api_key: api_key,
         };
         self.save_config(&config)?;
+        log::info!("Config saved to: {:?}", self.config_file);
         log::info!("API key successfully saved and encrypted");
         Ok(())
     }
@@ -67,85 +65,69 @@ impl ConfigManager {
             return Ok(None);
         }
 
-        let encrypted_data = fs::read(&self.config_file)
-            .context("Failed to read config file")?;
-
-        if encrypted_data.is_empty() {
-            return Ok(None);
-        }
-
-        let decrypted_data = self.decrypt_data(&encrypted_data)
-            .context("Failed to decrypt config file")?;
-
-        let config: AppConfig = serde_json::from_slice(&decrypted_data)
-            .context("Failed to parse config file")?;
-
+        let encrypted_data = std::fs::read_to_string(&self.config_file)?;
+        let decrypted_data = self.decrypt_data(&encrypted_data)?;
+        let config: AppConfig = serde_json::from_slice(&decrypted_data)?;
         Ok(Some(config))
     }
 
     fn save_config(&self, config: &AppConfig) -> Result<()> {
         // Ensure config directory exists
-        fs::create_dir_all(&self.config_dir)
-            .context("Failed to create config directory")?;
+        std::fs::create_dir_all(&self.config_dir)?;
 
-        let json_data = serde_json::to_vec(config)
-            .context("Failed to serialize config")?;
-
-        let encrypted_data = self.encrypt_data(&json_data)
-            .context("Failed to encrypt config")?;
-
-        fs::write(&self.config_file, encrypted_data)
-            .context("Failed to write config file")?;
-
-        log::info!("Config saved to: {:?}", self.config_file);
+        let json_data = serde_json::to_vec(config)?;
+        let encrypted_data = self.encrypt_data(&json_data)?;
+        std::fs::write(&self.config_file, encrypted_data)?;
         Ok(())
     }
 
     fn get_encryption_key(&self) -> Result<[u8; 32]> {
-        // Generate a machine-specific key based on config directory path
-        // This is a simple approach - in production, you might want to use
-        // more sophisticated key derivation
+        // Generate a machine-specific key based on hostname and user
+        let machine_id = format!(
+            "{}:{}",
+            std::env::var("USER").unwrap_or_else(|_| "unknown".to_string()),
+            gethostname::gethostname().to_string_lossy()
+        );
+        
         let mut hasher = Sha256::new();
-        hasher.update(self.config_dir.to_string_lossy().as_bytes());
-        hasher.update(b"mcp-switchboard-encryption-salt");
-        
-        // Add some system-specific data for uniqueness
-        if let Ok(hostname) = std::env::var("COMPUTERNAME") {
-            hasher.update(hostname.as_bytes());
-        } else if let Ok(hostname) = std::env::var("HOSTNAME") {
-            hasher.update(hostname.as_bytes());
-        }
-
+        hasher.update(machine_id.as_bytes());
+        hasher.update(b"mcp-switchboard-config-key");
         let result = hasher.finalize();
-        Ok(result.into())
-    }
-
-    fn encrypt_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let key = self.get_encryption_key()?;
-        let cipher = Aes256Gcm::new_from_slice(&key)
-            .context("Failed to create cipher")?;
-
-        // Use a fixed nonce for simplicity - in production, use random nonce
-        // and store it with the encrypted data
-        let nonce = Nonce::from_slice(b"unique_nonce"); // 12 bytes
         
-        let ciphertext = cipher.encrypt(nonce, data)
-            .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
-
-        // Encode as base64 for safe file storage
-        Ok(general_purpose::STANDARD.encode(ciphertext).into_bytes())
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&result);
+        Ok(key)
     }
 
-    fn decrypt_data(&self, encrypted_data: &[u8]) -> Result<Vec<u8>> {
-        let key = self.get_encryption_key()?;
-        let cipher = Aes256Gcm::new_from_slice(&key)
-            .context("Failed to create cipher")?;
+    fn encrypt_data(&self, data: &[u8]) -> Result<String> {
+        let key_bytes = self.get_encryption_key()?;
+        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+        let cipher = Aes256Gcm::new(key);
+        
+        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, data)
+            .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
+        
+        // Combine nonce and ciphertext for storage
+        let mut combined = nonce.to_vec();
+        combined.extend_from_slice(&ciphertext);
+        
+        Ok(general_purpose::STANDARD.encode(&combined))
+    }
 
-        // Decode from base64
-        let ciphertext = general_purpose::STANDARD.decode(encrypted_data)
-            .context("Failed to decode base64 data")?;
-
-        let nonce = Nonce::from_slice(b"unique_nonce"); // 12 bytes
+    fn decrypt_data(&self, encrypted_data: &str) -> Result<Vec<u8>> {
+        let combined = general_purpose::STANDARD.decode(encrypted_data)?;
+        
+        if combined.len() < 12 {
+            return Err(anyhow::anyhow!("Invalid encrypted data"));
+        }
+        
+        let (nonce_bytes, ciphertext) = combined.split_at(12);
+        let nonce = Nonce::from_slice(nonce_bytes);
+        
+        let key_bytes = self.get_encryption_key()?;
+        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+        let cipher = Aes256Gcm::new(key);
         
         let plaintext = cipher.decrypt(nonce, ciphertext.as_ref())
             .map_err(|e| anyhow::anyhow!("Decryption failed: {}", e))?;
@@ -160,5 +142,136 @@ impl ConfigManager {
 
     pub fn get_config_path(&self) -> &PathBuf {
         &self.config_file
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn create_test_config_manager() -> (ConfigManager, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let config_dir = temp_dir.path().join("mcp-switchboard");
+        let config_file = config_dir.join("config.json");
+        
+        let manager = ConfigManager {
+            config_dir,
+            config_file,
+        };
+        
+        (manager, temp_dir)
+    }
+
+    #[test]
+    fn test_has_config_with_no_file_no_env() {
+        std::env::remove_var("TOGETHERAI_API_KEY");
+        let (manager, _temp) = create_test_config_manager();
+        
+        assert!(!manager.has_config(), "should return false when no config file and no env var");
+    }
+
+    #[test]
+    fn test_has_config_with_env_var() {
+        std::env::set_var("TOGETHERAI_API_KEY", "test-key");
+        let (manager, _temp) = create_test_config_manager();
+        
+        assert!(manager.has_config(), "should return true when env var is set");
+        
+        std::env::remove_var("TOGETHERAI_API_KEY");
+    }
+
+    #[test]
+    fn test_has_config_with_file() {
+        std::env::remove_var("TOGETHERAI_API_KEY");
+        let (manager, _temp) = create_test_config_manager();
+        
+        // Create the config directory and file
+        fs::create_dir_all(&manager.config_dir).unwrap();
+        fs::write(&manager.config_file, "dummy content").unwrap();
+        
+        assert!(manager.has_config(), "should return true when config file exists");
+    }
+
+    #[test]
+    fn test_save_and_load_config() {
+        std::env::remove_var("TOGETHERAI_API_KEY");
+        let (manager, _temp) = create_test_config_manager();
+        
+        let test_key = "test-api-key-12345";
+        
+        // Test saving
+        manager.save_api_key(test_key.to_string()).unwrap();
+        
+        // Test that file was created
+        assert!(manager.config_file.exists(), "config file should exist after saving");
+        assert!(manager.has_config(), "has_config should return true after saving");
+        
+        // Test loading
+        let loaded_key = manager.get_api_key().unwrap();
+        assert_eq!(loaded_key, Some(test_key.to_string()), "loaded key should match saved key");
+    }
+
+    #[test]
+    fn test_encryption_roundtrip() {
+        let (manager, _temp) = create_test_config_manager();
+        
+        let test_data = b"test encryption data";
+        let encrypted = manager.encrypt_data(test_data).unwrap();
+        let decrypted = manager.decrypt_data(&encrypted).unwrap();
+        
+        assert_eq!(test_data, decrypted.as_slice(), "decrypted data should match original");
+    }
+
+    #[test]
+    fn test_config_persistence_across_instances() {
+        std::env::remove_var("TOGETHERAI_API_KEY");
+        let temp_dir = TempDir::new().unwrap();
+        let config_dir = temp_dir.path().join("mcp-switchboard");
+        let config_file = config_dir.join("config.json");
+        
+        let test_key = "persistent-test-key";
+        
+        // First instance - save config
+        {
+            let manager1 = ConfigManager {
+                config_dir: config_dir.clone(),
+                config_file: config_file.clone(),
+            };
+            
+            manager1.save_api_key(test_key.to_string()).unwrap();
+            assert!(manager1.has_config(), "first instance should detect config");
+        }
+        
+        // Second instance - load config
+        {
+            let manager2 = ConfigManager {
+                config_dir: config_dir.clone(),
+                config_file: config_file.clone(),
+            };
+            
+            assert!(manager2.has_config(), "second instance should detect existing config");
+            let loaded_key = manager2.get_api_key().unwrap();
+            assert_eq!(loaded_key, Some(test_key.to_string()), "second instance should load same key");
+        }
+    }
+
+    #[test]
+    fn test_env_var_priority() {
+        let env_key = "env-var-key";
+        let file_key = "file-key";
+        
+        std::env::set_var("TOGETHERAI_API_KEY", env_key);
+        let (manager, _temp) = create_test_config_manager();
+        
+        // Save a different key to file
+        manager.save_api_key(file_key.to_string()).unwrap();
+        
+        // Environment variable should take priority
+        let loaded_key = manager.get_api_key().unwrap();
+        assert_eq!(loaded_key, Some(env_key.to_string()), "env var should take priority over file");
+        
+        std::env::remove_var("TOGETHERAI_API_KEY");
     }
 }
