@@ -46,6 +46,7 @@ A secure Tauri desktop application providing a chat interface for streaming AI c
 - Node.js 18+ and npm
 - Rust 1.77.2+
 - Tauri CLI: `npm install -g @tauri-apps/cli`
+- Lima (for cross-platform testing): `brew install lima lima-additional-guestagents`
 
 ### Quick Start
 
@@ -54,6 +55,15 @@ A secure Tauri desktop application providing a chat interface for streaming AI c
 git clone <repository>
 cd mcp-switchboard/mcp-switchboard-ui
 npm install
+
+# Lima Testing Setup (one-time setup for cross-platform testing)
+./lima-manager.sh setup   # Auto-detects default instance architecture (VZ/aarch64 or QEMU/x86_64)
+                          # Installs Node.js, Rust, tauri-driver in Linux VM (~3-5 minutes)
+./lima-manager.sh verify  # Validates test environment is ready
+
+# Testing Commands
+npm test                  # Fast local tests (frontend + backend unit tests)
+npm run verify           # Full integration tests with Lima E2E testing
 
 # Development with environment variable
 TOGETHERAI_API_KEY=your_key_here npm run tauri dev
@@ -66,6 +76,27 @@ npm run tauri dev
 
 ```bash
 npm run tauri build
+```
+
+### Lima Testing Troubleshooting
+
+**Prerequisites Check:**
+```bash
+./lima-manager.sh status    # Check Lima installation and instance status
+limactl list               # View all Lima instances
+```
+
+**Common Issues:**
+- **Setup hangs**: Fixed in current version - uses reliable step-by-step installation
+- **Architecture mismatch**: Script auto-detects VZ/aarch64 on Apple Silicon, QEMU/x86_64 on Intel
+- **Dependency failures**: Each dependency installed separately with error handling
+- **Instance conflicts**: Use `./lima-manager.sh destroy` then `./lima-manager.sh setup` to start fresh
+
+**Manual Recovery:**
+```bash
+./lima-manager.sh destroy   # Remove broken instance
+./lima-manager.sh setup     # Clean setup with architecture detection
+./lima-manager.sh verify    # Confirm all dependencies installed
 ```
 
 ## Debugging and Logging
@@ -154,6 +185,10 @@ The application supports multiple logging destinations:
 - **Backend**: Tauri 2.x with Rust
 - **AI Integration**: Together.ai API via OpenAI-compatible client
 - **Config**: Encrypted JSON with AES-256-GCM
+- **Testing**: Lima VM with architecture auto-detection (VZ on Apple Silicon, QEMU on Intel)
+  - **Setup Process**: Automatically detects existing Lima default instance configuration
+  - **Dependencies**: Installs Node.js 20.x, Rust 1.88+, tauri-driver in isolated Linux environment
+  - **Performance**: ~3-5 minutes setup time, reliable unattended installation
 
 ## README-Driven Development (RDD) Roadmap
 

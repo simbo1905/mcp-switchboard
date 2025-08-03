@@ -10,8 +10,13 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"test": "vitest",
+		"test": "./test-fast.sh",
 		"test:run": "vitest run",
+		"test:watch": "vitest",
+		"verify": "./test-verify.sh",
+		"lima:setup": "./lima-manager.sh setup",
+		"lima:verify": "./lima-manager.sh verify",
+		"lima:destroy": "./lima-manager.sh destroy",
 		"tauri": "tauri"
 	},
 	"devDependencies": {

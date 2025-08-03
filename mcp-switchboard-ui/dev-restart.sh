@@ -23,7 +23,7 @@ kill_from_pid_file "./vite.pid"
 kill_from_pid_file "./cargo.pid"
 
 # Clean up logs and any remaining pid files
-find . -name "*.log" -o -name "*.pid" | xargs rm -f
+find . \( -name "*.log" -o -name "*.pid" \) -print0 | xargs -0 rm -f
 
 # Kill any hanging processes by name
 pkill -f "cargo run" || true
