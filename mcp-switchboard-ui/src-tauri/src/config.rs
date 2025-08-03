@@ -44,18 +44,22 @@ impl ConfigManager {
 
         // Then check encrypted config file
         if let Some(config) = self.load_config()? {
-            log::info!("Using API key from config file");
+            log::info!("Using API key from encrypted config file: {:?}", self.config_file);
             return Ok(Some(config.together_ai_api_key));
         }
 
+        log::warn!("No API key found in environment or config file");
         Ok(None)
     }
 
     pub fn save_api_key(&self, api_key: String) -> Result<()> {
+        log::info!("Saving API key to encrypted config file: {:?}", self.config_file);
         let config = AppConfig {
             together_ai_api_key: api_key,
         };
-        self.save_config(&config)
+        self.save_config(&config)?;
+        log::info!("API key successfully saved and encrypted");
+        Ok(())
     }
 
     fn load_config(&self) -> Result<Option<AppConfig>> {

@@ -26,8 +26,15 @@ vite.config.ts.timestamp-*
 *.log
 tauri.log
 
+# Build monitoring files
+*.pid
+build.log
+env-test.log
+tauri-test.log
+
 # Tauri build output
 src-tauri/target/
 
 CLAUDE.md
 .claude/
+CLAUDE.local.md

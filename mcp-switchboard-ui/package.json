@@ -22,6 +22,7 @@
 		"vite": "^7.0.4"
 	},
 	"dependencies": {
-		"@tauri-apps/api": "^2.7.0"
+		"@tauri-apps/api": "^2.7.0",
+		"@tauri-apps/plugin-log": "^2.6.0"
 	}
 }

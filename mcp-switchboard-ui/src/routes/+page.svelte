@@ -14,6 +14,16 @@
     });
   }
 
+  async function logInfo(message: string) {
+    if (invoke) {
+      try {
+        await invoke('log_info', { message });
+      } catch (err) {
+        console.log('Frontend log:', message);
+      }
+    }
+  }
+
   let messages: { type: 'user' | 'assistant'; content: string }[] = [];
   let inputMessage = '';
   let isStreaming = false;
@@ -64,10 +74,12 @@
     if (!setupApiKey.trim() || !invoke) return;
     
     try {
+      if (logInfo) logInfo(`User entering API key of length ${setupApiKey.length}`);
       await invoke('save_api_config', { apiKey: setupApiKey });
       hasApiKey = true;
       showSetup = false;
       setupApiKey = '';
+      if (logInfo) logInfo('API key configuration completed successfully');
     } catch (error) {
       console.error('Failed to save API config:', error);
       alert('Failed to save API key. Please try again.');
@@ -80,6 +92,9 @@
     const userMessage = { type: 'user' as const, content: inputMessage };
     messages = [...messages, userMessage];
     const messageToSend = inputMessage;
+    
+    if (logInfo) logInfo(`User sent chat message: "${messageToSend}"`);
+    
     inputMessage = '';
     isStreaming = true;
 
@@ -89,6 +104,7 @@
       });
     } catch (error) {
       console.error('Failed to send message:', error);
+      if (logInfo) logInfo(`Chat message failed: ${error}`);
       isStreaming = false;
     }
   }

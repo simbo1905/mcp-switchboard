@@ -68,6 +68,86 @@ npm run tauri dev
 npm run tauri build
 ```
 
+## Debugging and Logging
+
+### Accessing Developer Tools
+
+Tauri provides access to web inspector tools similar to Chrome/Firefox dev tools:
+
+**Keyboard Shortcuts:**
+- **Windows/Linux**: `Ctrl + Shift + I`
+- **macOS**: `Cmd + Option + I`
+
+**Right-click Method:**
+- Right-click in the WebView and choose "Inspect Element"
+
+**Platform-Specific Inspectors:**
+- **Linux**: webkit2gtk WebInspector
+- **macOS**: Safari's Web Inspector
+- **Windows**: Microsoft Edge DevTools
+
+### Logging Architecture
+
+#### Frontend (Svelte/JavaScript) Logging
+
+- **Console API**: Standard `console.log()`, `console.error()`, etc.
+- **Tauri Plugin Integration**: Use `tauri-plugin-log-api` for unified logging
+- **WebView Console**: Logs appear in the developer tools console
+
+```javascript
+import { attachConsole } from "tauri-plugin-log-api";
+
+// Enable webview console logging (call early in app lifecycle)
+await attachConsole();
+
+console.log("Frontend log message");
+```
+
+#### Backend (Rust) Logging
+
+- **Log Crate**: Uses standard Rust `log` crate with levels (error, warn, info, debug, trace)
+- **Multiple Targets**: Console output, webview console, and file logging
+- **Production Logging**: Writes to OS-standard log directories
+
+```rust
+use log::{info, warn, error};
+
+info!("Config loaded successfully");
+warn!("API key not found, showing setup");
+error!("Failed to encrypt config: {}", error);
+```
+
+#### Log Targets Configuration
+
+The application supports multiple logging destinations:
+
+1. **Console Output**: Terminal/stdout during development
+2. **WebView Console**: Browser dev tools (enable with LogTarget::Webview)
+3. **File Logging**: Production logs in OS-standard locations:
+   - **Windows**: `%APPDATA%/com.tauri.dev/logs/`
+   - **macOS**: `~/Library/Logs/com.tauri.dev/`
+   - **Linux**: `~/.local/share/com.tauri.dev/logs/`
+
+#### Development vs Production Logging
+
+**Development:**
+- WebView console enabled for real-time debugging
+- Verbose logging levels (debug/trace)
+- Console output for immediate feedback
+
+**Production:**
+- File-based logging for user-reported issues
+- Info/warn/error levels only
+- No console output to reduce overhead
+
+### Debugging Best Practices
+
+1. **Use Developer Tools**: Access via keyboard shortcuts or right-click
+2. **Check Both Frontend and Backend Logs**: Use unified logging approach
+3. **Enable WebView Console**: Call `attachConsole()` early in development
+4. **Use Appropriate Log Levels**: trace/debug for development, info/warn/error for production
+5. **Monitor Config Operations**: Check logs when API key operations occur
+
 ## Architecture
 
 - **Frontend**: SvelteKit 2.x with TypeScript

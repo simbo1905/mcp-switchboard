@@ -16,20 +16,46 @@ struct Payload {
 
 #[tauri::command]
 async fn get_api_config() -> Result<Option<String>, String> {
-    let config_manager = ConfigManager::new().map_err(|e| e.to_string())?;
-    config_manager.get_api_key().map_err(|e| e.to_string())
+    log::debug!("Frontend requested API configuration");
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    config_manager.get_api_key().map_err(|e| {
+        log::error!("Failed to get API key: {}", e);
+        e.to_string()
+    })
 }
 
 #[tauri::command]
 async fn save_api_config(api_key: String) -> Result<(), String> {
-    let config_manager = ConfigManager::new().map_err(|e| e.to_string())?;
-    config_manager.save_api_key(api_key).map_err(|e| e.to_string())
+    log::info!("Frontend requested to save API configuration");
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    config_manager.save_api_key(api_key).map_err(|e| {
+        log::error!("Failed to save API key: {}", e);
+        e.to_string()
+    })
 }
 
 #[tauri::command]
 async fn has_api_config() -> Result<bool, String> {
-    let config_manager = ConfigManager::new().map_err(|e| e.to_string())?;
-    Ok(config_manager.has_config())
+    log::debug!("Frontend checking if API configuration exists");
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    let has_config = config_manager.has_config();
+    log::debug!("API configuration exists: {}", has_config);
+    Ok(has_config)
+}
+
+#[tauri::command]
+async fn log_info(message: String) -> Result<(), String> {
+    log::info!("[Frontend] {}", message);
+    Ok(())
 }
 
 #[tauri::command]
@@ -37,10 +63,19 @@ async fn send_streaming_message(
     message: String,
     window: tauri::Window,
 ) -> Result<(), String> {
+    log::info!("Starting streaming message request");
     // Get API key from config
-    let config_manager = ConfigManager::new().map_err(|e| e.to_string())?;
-    let api_key = config_manager.get_api_key().map_err(|e| e.to_string())?
-        .ok_or_else(|| "No API key configured".to_string())?;
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager for streaming: {}", e);
+        e.to_string()
+    })?;
+    let api_key = config_manager.get_api_key().map_err(|e| {
+        log::error!("Failed to get API key for streaming: {}", e);
+        e.to_string()
+    })?.ok_or_else(|| {
+        log::error!("No API key configured for streaming");
+        "No API key configured".to_string()
+    })?;
     let config = OpenAIConfig::new()
         .with_api_key(api_key)
         .with_api_base("https://api.together.xyz/v1");
@@ -89,12 +124,22 @@ async fn send_streaming_message(
 
 fn main() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             get_api_config,
             save_api_config,
             has_api_config,
-            send_streaming_message
+            send_streaming_message,
+            log_info
         ])
+        .setup(|_app| {
+            log::info!("MCP Switchboard application starting");
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
