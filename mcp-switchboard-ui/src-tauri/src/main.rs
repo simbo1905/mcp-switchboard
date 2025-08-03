@@ -1,10 +1,13 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod config;
+
 use tauri::Emitter;
 use futures::stream::StreamExt;
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
+use config::ConfigManager;
 
 #[derive(Clone, serde::Serialize)]
 struct Payload {
@@ -12,11 +15,32 @@ struct Payload {
 }
 
 #[tauri::command]
+async fn get_api_config() -> Result<Option<String>, String> {
+    let config_manager = ConfigManager::new().map_err(|e| e.to_string())?;
+    config_manager.get_api_key().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn save_api_config(api_key: String) -> Result<(), String> {
+    let config_manager = ConfigManager::new().map_err(|e| e.to_string())?;
+    config_manager.save_api_key(api_key).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn has_api_config() -> Result<bool, String> {
+    let config_manager = ConfigManager::new().map_err(|e| e.to_string())?;
+    Ok(config_manager.has_config())
+}
+
+#[tauri::command]
 async fn send_streaming_message(
     message: String,
-    api_key: String,
     window: tauri::Window,
 ) -> Result<(), String> {
+    // Get API key from config
+    let config_manager = ConfigManager::new().map_err(|e| e.to_string())?;
+    let api_key = config_manager.get_api_key().map_err(|e| e.to_string())?
+        .ok_or_else(|| "No API key configured".to_string())?;
     let config = OpenAIConfig::new()
         .with_api_key(api_key)
         .with_api_base("https://api.together.xyz/v1");
@@ -65,7 +89,12 @@ async fn send_streaming_message(
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![send_streaming_message])
+        .invoke_handler(tauri::generate_handler![
+            get_api_config,
+            save_api_config,
+            has_api_config,
+            send_streaming_message
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
