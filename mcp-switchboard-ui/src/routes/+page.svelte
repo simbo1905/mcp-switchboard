@@ -5,15 +5,6 @@
   let invoke: any;
   let listen: any;
 
-  if (browser) {
-    import('@tauri-apps/api/core').then(module => {
-      invoke = module.invoke;
-    });
-    import('@tauri-apps/api/event').then(module => {
-      listen = module.listen;
-    });
-  }
-
   async function logInfo(message: string) {
     if (invoke) {
       try {
@@ -32,8 +23,14 @@
   let showSetup = false;
   let setupApiKey = '';
 
-  onMount(() => {
+  onMount(async () => {
     if (browser) {
+      // Wait for Tauri APIs to be available
+      const coreModule = await import('@tauri-apps/api/core');
+      const eventModule = await import('@tauri-apps/api/event');
+      invoke = coreModule.invoke;
+      listen = eventModule.listen;
+
       const setupListeners = async () => {
         await listen('chat-stream', (event: any) => {
           currentResponse += event.payload;
@@ -51,8 +48,8 @@
         });
       };
 
-      setupListeners();
-      checkApiConfig();
+      await setupListeners();
+      await checkApiConfig();
     }
   });
 
