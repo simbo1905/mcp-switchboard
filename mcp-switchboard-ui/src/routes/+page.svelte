@@ -22,6 +22,7 @@
   let hasApiKey = false;
   let showSetup = false;
   let setupApiKey = '';
+  let currentModel = 'Loading...';
 
   onMount(async () => {
     if (browser) {
@@ -60,10 +61,24 @@
       hasApiKey = await invoke('has_api_config');
       if (!hasApiKey) {
         showSetup = true;
+      } else {
+        // Load current model if we have API config
+        await loadCurrentModel();
       }
     } catch (error) {
       console.error('Failed to check API config:', error);
       showSetup = true;
+    }
+  }
+
+  async function loadCurrentModel() {
+    if (!invoke) return;
+    
+    try {
+      currentModel = await invoke('get_current_model');
+    } catch (error) {
+      console.error('Failed to load current model:', error);
+      currentModel = 'Unknown';
     }
   }
 
@@ -93,6 +108,13 @@
     if (logInfo) logInfo(`User sent chat message: "${messageToSend}"`);
     
     inputMessage = '';
+
+    // Check for chat commands
+    if (messageToSend.startsWith('/')) {
+      await handleChatCommand(messageToSend);
+      return;
+    }
+    
     isStreaming = true;
 
     try {
@@ -105,10 +127,81 @@
       isStreaming = false;
     }
   }
+
+  async function handleChatCommand(command: string) {
+    const parts = command.trim().split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+
+    try {
+      if (cmd === '/models') {
+        if (logInfo) logInfo('User requested models list');
+        const models = await invoke('get_available_models');
+        const currentModel = await invoke('get_current_model');
+        
+        let modelList = `📋 **Available Models:**\n\n`;
+        modelList += `🎯 **Current:** ${currentModel}\n\n`;
+        
+        for (const model of models) {
+          const current = model.id === currentModel ? ' 👈 *current*' : '';
+          modelList += `• **${model.display_name}** (${model.organization})\n`;
+          modelList += `  ID: \`${model.id}\`${current}\n\n`;
+        }
+        modelList += `💡 Use \`/model <model-id>\` to switch models`;
+        
+        messages = [...messages, { type: 'assistant', content: modelList }];
+        
+      } else if (cmd === '/model') {
+        if (parts.length < 2) {
+          messages = [...messages, { 
+            type: 'assistant', 
+            content: '❌ Please specify a model ID. Usage: `/model <model-id>`\n\nUse `/models` to see available models.' 
+          }];
+          return;
+        }
+        
+        const modelId = parts.slice(1).join(' ');
+        if (logInfo) logInfo(`User switching to model: ${modelId}`);
+        
+        try {
+          await invoke('set_preferred_model', { model: modelId });
+          await loadCurrentModel(); // Refresh current model display
+          messages = [...messages, { 
+            type: 'assistant', 
+            content: `✅ **Model switched successfully!**\n\nNow using: \`${modelId}\`` 
+          }];
+          if (logInfo) logInfo(`Model switched to: ${modelId}`);
+        } catch (error) {
+          messages = [...messages, { 
+            type: 'assistant', 
+            content: `❌ **Failed to switch model:** ${error}\n\nUse \`/models\` to see valid model IDs.` 
+          }];
+        }
+        
+      } else {
+        messages = [...messages, { 
+          type: 'assistant', 
+          content: `❓ **Unknown command:** ${cmd}\n\n**Available commands:**\n• \`/models\` - List available models\n• \`/model <id>\` - Switch to specific model` 
+        }];
+      }
+    } catch (error) {
+      console.error('Command failed:', error);
+      messages = [...messages, { 
+        type: 'assistant', 
+        content: `❌ **Command failed:** ${error}` 
+      }];
+    }
+  }
 </script>
 
 <div class="chat-interface">
   {#if hasApiKey}
+    <div class="chat-header">
+      <h3>🤖 MCP Switchboard</h3>
+      <div class="model-display">
+        <span class="model-label">Model:</span>
+        <span class="model-name">{currentModel}</span>
+      </div>
+    </div>
     <div class="messages">
       {#each messages as msg}
         <div class="message {msg.type}">
@@ -220,6 +313,46 @@
 
   .setup-btn:hover {
     background-color: #0056b3;
+  }
+
+  .chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #ddd;
+    background-color: #f8f9fa;
+  }
+
+  .chat-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 18px;
+  }
+
+  .model-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+  }
+
+  .model-label {
+    color: #666;
+    font-weight: 500;
+  }
+
+  .model-name {
+    color: #007bff;
+    background-color: #e7f3ff;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-family: monospace;
+    font-size: 12px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .messages {

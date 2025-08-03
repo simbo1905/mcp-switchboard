@@ -9,6 +9,16 @@ use sha2::{Sha256, Digest};
 #[derive(Serialize, Deserialize)]
 struct AppConfig {
     together_ai_api_key: String,
+    preferred_model: Option<String>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            together_ai_api_key: String::new(),
+            preferred_model: Some("meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo".to_string()),
+        }
+    }
 }
 
 pub struct ConfigManager {
@@ -51,12 +61,47 @@ impl ConfigManager {
 
     pub fn save_api_key(&self, api_key: String) -> Result<()> {
         log::info!("Saving API key to encrypted config file: {:?}", self.config_file);
-        let config = AppConfig {
-            together_ai_api_key: api_key,
-        };
+        
+        // Preserve existing config if it exists
+        let mut config = self.load_config()?.unwrap_or_else(|| AppConfig {
+            together_ai_api_key: String::new(),
+            preferred_model: AppConfig::default().preferred_model,
+        });
+        config.together_ai_api_key = api_key;
+        
         self.save_config(&config)?;
         log::info!("Config saved to: {:?}", self.config_file);
         log::info!("API key successfully saved and encrypted");
+        Ok(())
+    }
+
+    pub fn get_preferred_model(&self) -> Result<String> {
+        // First check if we have a saved preference
+        if let Some(config) = self.load_config()? {
+            if let Some(model) = config.preferred_model {
+                log::info!("Using preferred model from config: {}", model);
+                return Ok(model);
+            }
+        }
+        
+        // Fall back to default model
+        let default_model = AppConfig::default().preferred_model.unwrap();
+        log::info!("Using default model: {}", default_model);
+        Ok(default_model)
+    }
+
+    pub fn save_preferred_model(&self, model: String) -> Result<()> {
+        log::info!("Saving preferred model to config: {}", model);
+        
+        // Load existing config or create new one
+        let mut config = self.load_config()?.unwrap_or_else(|| AppConfig {
+            together_ai_api_key: String::new(),
+            preferred_model: AppConfig::default().preferred_model,
+        });
+        config.preferred_model = Some(model);
+        
+        self.save_config(&config)?;
+        log::info!("Preferred model saved successfully");
         Ok(())
     }
 
@@ -273,5 +318,81 @@ mod tests {
         assert_eq!(loaded_key, Some(env_key.to_string()), "env var should take priority over file");
         
         std::env::remove_var("TOGETHERAI_API_KEY");
+    }
+
+    #[test]
+    fn test_default_model() {
+        let (manager, _temp) = create_test_config_manager();
+        
+        // Should return default model when no config exists
+        let model = manager.get_preferred_model().unwrap();
+        assert_eq!(model, "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "should return default model");
+    }
+
+    #[test]
+    fn test_save_and_load_preferred_model() {
+        let (manager, _temp) = create_test_config_manager();
+        
+        let test_model = "test-model-id";
+        
+        // Test saving preferred model
+        manager.save_preferred_model(test_model.to_string()).unwrap();
+        
+        // Test loading preferred model
+        let loaded_model = manager.get_preferred_model().unwrap();
+        assert_eq!(loaded_model, test_model, "loaded model should match saved model");
+    }
+
+    #[test]
+    fn test_model_persistence_with_api_key() {
+        let (manager, _temp) = create_test_config_manager();
+        
+        let test_api_key = "test-api-key";
+        let test_model = "test-model-id";
+        
+        // Save API key first
+        manager.save_api_key(test_api_key.to_string()).unwrap();
+        
+        // Save model preference
+        manager.save_preferred_model(test_model.to_string()).unwrap();
+        
+        // Both should be persisted
+        let loaded_key = manager.get_api_key().unwrap().unwrap();
+        let loaded_model = manager.get_preferred_model().unwrap();
+        
+        assert_eq!(loaded_key, test_api_key, "API key should be preserved");
+        assert_eq!(loaded_model, test_model, "model preference should be preserved");
+    }
+
+    #[test]
+    fn test_config_backwards_compatibility() {
+        let (manager, _temp) = create_test_config_manager();
+        
+        // Create old config format (without preferred_model field)
+        let old_config = serde_json::json!({
+            "together_ai_api_key": "test-key"
+        });
+        
+        // Manually save old format config
+        fs::create_dir_all(&manager.config_dir).unwrap();
+        let json_data = serde_json::to_vec(&old_config).unwrap();
+        let encrypted_data = manager.encrypt_data(&json_data).unwrap();
+        fs::write(&manager.config_file, encrypted_data).unwrap();
+        
+        // Should still be able to load API key
+        let loaded_key = manager.get_api_key().unwrap().unwrap();
+        assert_eq!(loaded_key, "test-key", "should load API key from old config format");
+        
+        // Should return default model when not specified
+        let loaded_model = manager.get_preferred_model().unwrap();
+        assert_eq!(loaded_model, "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "should return default model for old config");
+        
+        // Saving new model should preserve API key
+        manager.save_preferred_model("new-model".to_string()).unwrap();
+        let updated_key = manager.get_api_key().unwrap().unwrap();
+        let updated_model = manager.get_preferred_model().unwrap();
+        
+        assert_eq!(updated_key, "test-key", "API key should be preserved after model update");
+        assert_eq!(updated_model, "new-model", "new model should be saved");
     }
 }

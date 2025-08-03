@@ -28,6 +28,7 @@ sha2 = "0.10"
 dirs = "5.0"
 anyhow = "1.0"
 gethostname = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
 tempfile = "3.8"

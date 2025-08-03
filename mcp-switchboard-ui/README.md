@@ -19,6 +19,11 @@ A Tauri desktop application with SvelteKit frontend that provides a chat interfa
   - [ ] `/models` command to list available models
   - [ ] `/model xxx` command to select model
   - [ ] Persistent model preference in config
+- [ ] Screenshot capabilities for UI development and user features
+  - [ ] Built-in screenshot capture using cross-platform Rust crate (xcap/scap)
+  - [ ] Keyboard shortcut for users to capture screenshots
+  - [ ] Automated screenshot capture for LLM-assisted UI development
+  - [ ] Screenshot-based testing and visual feedback loops
 - [ ] Enhanced chat features
 - [ ] Export conversation history
 
@@ -34,6 +39,9 @@ npm install
 
 # Stop development servers
 ./dev-shutdown.sh
+
+# Run unit tests
+./test-models.sh
 ```
 
 ### Manual Commands
@@ -42,6 +50,13 @@ npm run dev          # Frontend development server
 npm run tauri dev    # Full Tauri development mode
 npm run build        # Production build
 npm run tauri build  # Tauri desktop build
+```
+
+### Testing
+```sh
+./test-models.sh     # Run model management unit tests (background)
+tail -f ./test.log   # Monitor test progress
+kill $(cat test.pid) # Stop tests if needed
 ```
 
 ### Configuration
