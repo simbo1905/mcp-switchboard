@@ -6,7 +6,14 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: [],
-    include: ['src/**/*.{test,spec}.{js,ts}']
+    setupFiles: ['src/test-setup.ts'],
+    include: ['src/**/*.{test,spec}.{js,ts}'],
+    alias: {
+      $app: '/src/app',
+      $lib: '/src/lib'
+    }
+  },
+  define: {
+    'process.env.NODE_ENV': '"test"'
   }
 });
