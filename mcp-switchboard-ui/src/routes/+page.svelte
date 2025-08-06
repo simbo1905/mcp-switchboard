@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { SpotlightSearchImpl, type ModelInfo } from '$lib/spotlight';
+  import { HelpSystem } from '$lib/help-system';
 
   let invoke: any;
   let listen: any;
@@ -29,20 +30,140 @@
   let spotlight = new SpotlightSearchImpl();
   let commandTimeout: number;
 
+  // Debug logging controls
+  let debugLevels = {
+    startup: true,
+    userInput: true,
+    response: true,
+    streaming: true,
+    models: true
+  };
+
+  // Register debug interface on window using bulletproof help system
+  function registerDebugInterface() {
+    if (typeof window !== 'undefined') {
+      const helpSystem = new HelpSystem();
+
+      // Info function
+      const infoFn = () => {
+        console.log("🏗️  MCP Switchboard Debug Info:");
+        console.log("   Version: 0.1.0");
+        console.log("   Build: Development");
+        console.log("   Frontend: SvelteKit + Tauri");
+        console.log("   Backend: Rust + async-openai");
+        console.log("   Current model:", currentModel);
+        console.log("   Messages count:", messages.length);
+        console.log("   Streaming active:", isStreaming);
+        console.log("   Has API key:", hasApiKey);
+      };
+
+      // Logging functions
+      const loggingFns = {
+        disable(category: string) {
+          if (category === 'all') {
+            Object.keys(debugLevels).forEach(k => debugLevels[k] = false);
+            console.log("🔇 All logging disabled");
+          } else if (debugLevels.hasOwnProperty(category)) {
+            debugLevels[category] = false;
+            console.log(`🔇 Disabled logging for: ${category}`);
+          } else {
+            console.log("❌ Unknown category. Available:", Object.keys(debugLevels));
+          }
+        },
+        enable(category: string) {
+          if (category === 'all') {
+            Object.keys(debugLevels).forEach(k => debugLevels[k] = true);
+            console.log("🔊 All logging enabled");
+          } else if (debugLevels.hasOwnProperty(category)) {
+            debugLevels[category] = true;
+            console.log(`🔊 Enabled logging for: ${category}`);
+          } else {
+            console.log("❌ Unknown category. Available:", Object.keys(debugLevels));
+          }
+        },
+        status() {
+          console.log("📊 Logging Status:");
+          Object.entries(debugLevels).forEach(([key, value]) => {
+            console.log(`   ${key}: ${value ? '🔊' : '🔇'}`);
+          });
+        }
+      };
+
+      // Register all functions with help system
+      helpSystem.registerFunction('info', infoFn, {
+        helpText: 'Display build and runtime information',
+        usage: 'window.mcps.info()',
+        examples: ['window.mcps.info()'],
+        category: 'core'
+      });
+
+      helpSystem.registerNestedObject('logging', loggingFns, {
+        disable: {
+          helpText: 'Disable logging for specific category or all',
+          usage: 'window.mcps.logging.disable(category)',
+          examples: [
+            'window.mcps.logging.disable("streaming")',
+            'window.mcps.logging.disable("all")'
+          ],
+          category: 'logging'
+        },
+        enable: {
+          helpText: 'Enable logging for specific category or all',
+          usage: 'window.mcps.logging.enable(category)',
+          examples: [
+            'window.mcps.logging.enable("streaming")',
+            'window.mcps.logging.enable("all")'
+          ],
+          category: 'logging'
+        },
+        status: {
+          helpText: 'Show current status of all logging categories',
+          usage: 'window.mcps.logging.status()',
+          examples: ['window.mcps.logging.status()'],
+          category: 'logging'
+        }
+      });
+
+      // Build and assign the API object with help method
+      window.mcps = helpSystem.buildApiObject(console);
+      
+      console.log("🛠️  Debug interface registered: window.mcps");
+      console.log("📚  Type 'window.mcps.help()' for help");
+    }
+  }
+
   onMount(async () => {
+    if (debugLevels.startup) {
+      console.log("🚀 [STARTUP] Frontend initialized at", new Date().toISOString());
+      console.log("🚀 [STARTUP] Window location:", window.location.href);
+      console.log("🚀 [STARTUP] Browser environment:", browser);
+      console.error("🔴 [STARTUP TEST] This is a test error - if you see this, console.error works!");
+    }
+    
+    registerDebugInterface();
+    
     if (browser) {
       // Wait for Tauri APIs to be available
       const coreModule = await import('@tauri-apps/api/core');
       const eventModule = await import('@tauri-apps/api/event');
       invoke = coreModule.invoke;
       listen = eventModule.listen;
+      if (debugLevels.startup) {
+        console.log("🚀 [STARTUP] Tauri modules imported successfully");
+      }
 
       const setupListeners = async () => {
         await listen('chat-stream', (event: any) => {
+          if (debugLevels.streaming) {
+            console.log("📥 [RESPONSE] Received stream chunk");
+          }
           currentResponse += event.payload;
         });
 
         await listen('chat-complete', () => {
+          if (debugLevels.response) {
+            console.log("📥 [RESPONSE] Stream completed, message length:", currentResponse.length);
+          }
           messages = [...messages, { type: 'assistant', content: currentResponse }];
           currentResponse = '';
           isStreaming = false;
@@ -111,6 +232,11 @@
     messages = [...messages, userMessage];
     const messageToSend = inputMessage;
     
+    if (debugLevels.userInput) {
+      console.log("📤 [USER INPUT] Preparing message:", messageToSend);
+      console.log("📤 [USER INPUT] Length:", messageToSend.length);
+    }
+    
     if (logInfo) logInfo(`User sent chat message: "${messageToSend}"`);
     
     inputMessage = '';
@@ -135,9 +261,18 @@
 
     try {
       if (cmd === '/models') {
+        if (debugLevels.models) {
+          console.log("🔧 [MODELS] User requested models list");
+        }
         if (logInfo) logInfo('User requested models list');
         const models = await invoke('get_available_models');
+        if (debugLevels.models) {
+          console.log("🔧 [MODELS] Retrieved models count:", models.length);
+        }
         const currentModel = await invoke('get_current_model');
+        if (debugLevels.models) {
+          console.log("🔧 [MODELS] Current model:", currentModel);
+        }
         
         let modelList = `📋 **Available Models:**\n\n`;
         modelList += `🎯 **Current:** ${currentModel}\n\n`;

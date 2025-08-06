@@ -17,6 +17,7 @@ struct ModelInfo {
     organization: String,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 struct Payload {
   message: String,

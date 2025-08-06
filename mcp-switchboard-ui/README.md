@@ -131,6 +131,58 @@ GitHub Actions runs `npm run verify` on all PRs. The CI environment handles Lima
 - **Production**: API key stored encrypted in platform config directory
 - **Logging**: Uses tauri-plugin-log with INFO/FINE/FINER levels
 
+## Debug Interface
+
+When running the application, a debug interface is available in the browser DevTools console:
+
+### Core Commands
+
+- `window.mcps.help()` - Show all available commands with documentation
+- `window.mcps.info()` - Display build and runtime information
+
+### Logging Control
+
+- `window.mcps.logging.status()` - Show current logging levels
+- `window.mcps.logging.disable(category)` - Disable logging for category ('all', 'streaming', 'userInput', 'response', 'models', 'startup')
+- `window.mcps.logging.enable(category)` - Enable logging for category
+
+### Help System Features
+
+The debug interface uses a self-documenting help system that:
+
+- **Automatically discovers** all functions and nested objects
+- **Validates** that every registered function has help documentation
+- **Provides usage examples** for complex functions
+- **Groups commands** logically (core, logging, etc.)
+- **Validates at runtime** that help text exists for all registered functions
+
+Example usage:
+
+```javascript
+// Get help for everything
+window.mcps.help()
+
+// Get help for specific category
+window.mcps.help('logging')
+
+// Disable streaming log spam
+window.mcps.logging.disable('streaming')
+
+// Check what's still enabled
+window.mcps.logging.status()
+```
+
+### Help System Requirements
+
+Every function registered in `window.mcps` must include:
+
+1. **helpText**: String describing what the function does
+2. **usage**: String showing how to call it (optional)
+3. **examples**: Array of example usage strings (optional)
+4. **category**: String for grouping related functions (optional, defaults to 'core')
+
+The help system will fail fast during development if any registered function lacks proper documentation.
+
 ## Architecture
 
 **Frontend**: SvelteKit 2.x + Svelte 5.x + TypeScript  
