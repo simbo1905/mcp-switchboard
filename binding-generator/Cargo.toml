@@ -1,0 +1,21 @@
+[package]
+name = "binding-generator"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "binding-generator"
+path = "src/main.rs"
+
+[dependencies]
+mcp-core = { path = "../mcp-core" }
+tauri-specta = "2.0.0-rc.20"
+specta = "2.0.0-rc.20"
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"
+
+[build-dependencies]
+sha2 = "0.10"
+walkdir = "2.0"
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"

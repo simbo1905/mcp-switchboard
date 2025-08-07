@@ -1,0 +1,324 @@
+use serde::{Deserialize, Serialize};
+use specta::Type;
+use tauri::Emitter;
+use futures::stream::StreamExt;
+use async_openai::Client;
+use async_openai::config::OpenAIConfig;
+
+// Re-export everything needed by consumers
+pub use config::ConfigManager;
+
+mod config;
+
+#[derive(Serialize, Deserialize, Clone, Type)]
+#[specta(export)]
+pub struct ModelInfo {
+    pub id: String,
+    pub display_name: String,
+    pub organization: String,
+}
+
+#[derive(Serialize, Deserialize, Type)]
+#[specta(export)]
+pub struct ApiError {
+    pub message: String,
+    pub code: Option<String>,
+}
+
+// Event payload types 
+#[derive(Serialize, Type)]
+#[specta(export)]
+pub struct ChatStreamPayload {
+    pub content: String,
+}
+
+impl tauri_specta::Event for ChatStreamPayload {
+    const NAME: &'static str = "chat-stream";
+}
+
+#[derive(Serialize, Type)]
+#[specta(export)]
+pub struct ChatErrorPayload {
+    pub error: String,
+}
+
+impl tauri_specta::Event for ChatErrorPayload {
+    const NAME: &'static str = "chat-error";
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_api_config() -> Result<Option<String>, String> {
+    log::debug!("Frontend requested API configuration");
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    config_manager.get_api_key().map_err(|e| {
+        log::error!("Failed to get API key: {}", e);
+        e.to_string()
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn save_api_config(api_key: String) -> Result<(), String> {
+    log::info!("Frontend requested to save API configuration");
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    config_manager.save_api_key(api_key).map_err(|e| {
+        log::error!("Failed to save API key: {}", e);
+        e.to_string()
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn has_api_config() -> Result<bool, String> {
+    log::info!("Frontend checking if API configuration exists");
+    log::info!("Current working directory: {:?}", std::env::current_dir());
+    log::info!("USER env var: {:?}", std::env::var("USER"));
+    
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    
+    log::info!("Config file path: {:?}", config_manager.get_config_path());
+    log::info!("Config file exists: {}", config_manager.get_config_path().exists());
+    log::info!("Environment variable TOGETHERAI_API_KEY set: {}", std::env::var("TOGETHERAI_API_KEY").is_ok());
+    
+    let has_config = config_manager.has_config();
+    log::info!("Final has_config result: {}", has_config);
+    Ok(has_config)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn log_info(message: String) -> Result<(), String> {
+    log::info!("[Frontend] {}", message);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_available_models() -> Result<Vec<ModelInfo>, String> {
+    log::info!("Fetching available models from Together.ai API");
+    
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    let api_key = config_manager.get_api_key().map_err(|e| {
+        log::error!("Failed to get API key: {}", e);
+        e.to_string()
+    })?.ok_or_else(|| {
+        log::error!("No API key configured");
+        "No API key configured".to_string()
+    })?;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://api.together.xyz/v1/models")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .map_err(|e| {
+            log::error!("Failed to fetch models: {}", e);
+            e.to_string()
+        })?;
+
+    let models: serde_json::Value = response.json().await.map_err(|e| {
+        log::error!("Failed to parse models response: {}", e);
+        e.to_string()
+    })?;
+
+    let model_list = models.as_array().ok_or_else(|| {
+        log::error!("Models response is not an array");
+        "Invalid models response format".to_string()
+    })?;
+
+    let mut result = Vec::new();
+    for model in model_list {
+        if let Some(id) = model["id"].as_str() {
+            let organization = model.get("organization")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown");
+            let display_name = model.get("display_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(id);
+            
+            result.push(ModelInfo {
+                id: id.to_string(),
+                display_name: display_name.to_string(),
+                organization: organization.to_string(),
+            });
+        }
+    }
+
+    log::info!("Successfully fetched {} models", result.len());
+    Ok(result)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_current_model() -> Result<String, String> {
+    log::info!("Getting current preferred model");
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    config_manager.get_preferred_model().map_err(|e| {
+        log::error!("Failed to get preferred model: {}", e);
+        e.to_string()
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_preferred_model(model: String) -> Result<(), String> {
+    log::info!("Setting preferred model to: {}", model);
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager: {}", e);
+        e.to_string()
+    })?;
+    config_manager.save_preferred_model(model).map_err(|e| {
+        log::error!("Failed to save preferred model: {}", e);
+        e.to_string()
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn send_streaming_message(
+    message: String,
+    window: tauri::Window,
+) -> Result<(), String> {
+    log::info!("Starting streaming message request");
+    // Get API key from config
+    let config_manager = ConfigManager::new().map_err(|e| {
+        log::error!("Failed to create config manager for streaming: {}", e);
+        e.to_string()
+    })?;
+    let api_key = config_manager.get_api_key().map_err(|e| {
+        log::error!("Failed to get API key for streaming: {}", e);
+        e.to_string()
+    })?.ok_or_else(|| {
+        log::error!("No API key configured for streaming");
+        "No API key configured".to_string()
+    })?;
+    let config = OpenAIConfig::new()
+        .with_api_key(api_key)
+        .with_api_base("https://api.together.xyz/v1");
+
+    let client = Client::with_config(config);
+
+    // Get preferred model
+    let model = config_manager.get_preferred_model().map_err(|e| {
+        log::error!("Failed to get preferred model for streaming: {}", e);
+        e.to_string()
+    })?;
+    log::info!("Using model for streaming: {}", model);
+
+    let request = async_openai::types::CreateChatCompletionRequestArgs::default()
+        .model(model)
+        .messages(vec![
+            async_openai::types::ChatCompletionRequestMessage::User(
+                async_openai::types::ChatCompletionRequestUserMessageArgs::default()
+                    .content(message)
+                    .build()
+                    .unwrap(),
+            ),
+        ])
+        .stream(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut stream = client
+        .chat()
+        .create_stream(request)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(response) => {
+                if let Some(choice) = response.choices.first() {
+                    if let Some(content) = &choice.delta.content {
+                        window.emit("chat-stream", content).map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+            Err(e) => {
+                window.emit("chat-error", &e.to_string()).map_err(|e| e.to_string())?;
+                break;
+            }
+        }
+    }
+
+    window.emit("chat-complete", ()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_build_info() -> Result<BuildInfo, String> {
+    let build_info = BuildInfo::load().map_err(|e| e.to_string())?;
+    Ok(build_info)
+}
+
+#[derive(Serialize, Deserialize, Clone, Type)]
+#[specta(export)]
+pub struct BuildInfo {
+    pub module: String,
+    pub fingerprint: String,
+    pub git_commit: String,
+    pub build_time: String,
+    pub dependencies: Vec<DependencyInfo>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Type)]
+#[specta(export)]
+pub struct DependencyInfo {
+    pub module: String,
+    pub fingerprint: String,
+    pub verified: bool,
+}
+
+impl BuildInfo {
+    pub fn load() -> anyhow::Result<BuildInfo> {
+        // Load build info from embedded data or file
+        let build_info_path = "/tmp/build-info-mcp-core.json";
+        if std::path::Path::new(build_info_path).exists() {
+            let data = std::fs::read_to_string(build_info_path)?;
+            let mut build_info: BuildInfo = serde_json::from_str(&data)?;
+            
+            // Load dependency information
+            build_info.dependencies = vec![]; // mcp-core has no dependencies
+            
+            Ok(build_info)
+        } else {
+            // Fallback for when build info file doesn't exist
+            Ok(BuildInfo {
+                module: "mcp-core".to_string(),
+                fingerprint: "development".to_string(),
+                git_commit: "unknown".to_string(),
+                build_time: "unknown".to_string(),
+                dependencies: vec![],
+            })
+        }
+    }
+    
+    pub fn log_startup_info(&self) {
+        log::info!("=== MCP-CORE BUILD INFO ===");
+        log::info!("Module: {}", self.module);
+        log::info!("Build fingerprint: {}", self.fingerprint);
+        log::info!("Git commit: {}", self.git_commit);
+        log::info!("Build time: {}", self.build_time);
+        log::info!("Dependencies verified: {}", self.dependencies.iter().all(|d| d.verified));
+        log::info!("========================");
+    }
+}

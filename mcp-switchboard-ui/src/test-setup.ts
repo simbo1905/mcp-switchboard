@@ -1,22 +1,18 @@
 import '@testing-library/jest-dom';
+import { setupMockTauri } from './lib/testing/mockTauri';
+import { vi } from 'vitest';
 
 // Ensure DOM environment
 global.window = global.window || {};
 global.document = global.document || {};
 
-// Mock browser environment
-Object.defineProperty(window, 'location', {
-  value: {
-    href: 'http://localhost:5173'
-  },
-  writable: true
-});
+// Set up mock Tauri environment for all tests
+setupMockTauri();
 
-// Mock console methods to avoid noise in tests
+// Mock console methods to avoid noise in tests (but keep error for important issues)
 global.console = {
   ...console,
   log: vi.fn(),
-  error: vi.fn(),
   warn: vi.fn(),
   info: vi.fn()
 };

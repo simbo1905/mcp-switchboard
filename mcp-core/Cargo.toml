@@ -1,0 +1,35 @@
+[package]
+name = "mcp-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Core dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+log = "0.4"
+anyhow = "1.0"
+
+# Tauri ecosystem
+tauri = "2.3.0"
+specta = "2.0.0-rc.20"
+tauri-specta = "2.0.0-rc.20"
+
+# AI integration
+async-openai = "0.28"
+futures = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
+
+# Config dependencies
+dirs = "5.0"
+aes-gcm = "0.10"
+base64 = "0.22"
+sha2 = "0.10"
+gethostname = "0.5"
+
+[build-dependencies]
+sha2 = "0.10"
+walkdir = "2.0"
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"

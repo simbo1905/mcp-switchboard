@@ -3,17 +3,14 @@
   import { browser } from '$app/environment';
   import { SpotlightSearchImpl, type ModelInfo } from '$lib/spotlight';
   import { HelpSystem } from '$lib/help-system';
+  import { commands } from '$lib/tauri';
 
-  let invoke: any;
-  let listen: any;
 
   async function logInfo(message: string) {
-    if (invoke) {
-      try {
-        await invoke('log_info', { message });
-      } catch (err) {
-        console.log('Frontend log:', message);
-      }
+    try {
+      await commands.logInfo({ message });
+    } catch (err) {
+      console.log('Frontend log:', message);
     }
   }
 
@@ -28,10 +25,10 @@
   let currentMode = 'chat';
   let spotlightVisible = false;
   let spotlight = new SpotlightSearchImpl();
-  let commandTimeout: number;
+  let commandTimeout: ReturnType<typeof setTimeout>;
 
-  // Debug logging controls
-  let debugLevels = {
+  // Debug logging controls with index signature
+  let debugLevels: { [key: string]: boolean } = {
     startup: true,
     userInput: true,
     response: true,
@@ -143,16 +140,12 @@
     registerDebugInterface();
     
     if (browser) {
-      // Wait for Tauri APIs to be available
-      const coreModule = await import('@tauri-apps/api/core');
-      const eventModule = await import('@tauri-apps/api/event');
-      invoke = coreModule.invoke;
-      listen = eventModule.listen;
       if (debugLevels.startup) {
-        console.log("🚀 [STARTUP] Tauri modules imported successfully");
+        console.log("🚀 [STARTUP] Type-safe commands ready");
       }
 
       const setupListeners = async () => {
+        const { listen } = await import('@tauri-apps/api/event');
         await listen('chat-stream', (event: any) => {
           if (debugLevels.streaming) {
             console.log("📥 [RESPONSE] Received stream chunk");
@@ -182,10 +175,8 @@
   });
 
   async function checkApiConfig() {
-    if (!invoke) return;
-    
     try {
-      hasApiKey = await invoke('has_api_config');
+      hasApiKey = await commands.hasApiConfig();
       if (!hasApiKey) {
         showSetup = true;
       } else {
@@ -199,10 +190,8 @@
   }
 
   async function loadCurrentModel() {
-    if (!invoke) return;
-    
     try {
-      currentModel = await invoke('get_current_model');
+      currentModel = await commands.getCurrentModel();
     } catch (error) {
       console.error('Failed to load current model:', error);
       currentModel = 'Unknown';
@@ -210,11 +199,11 @@
   }
 
   async function saveApiKey() {
-    if (!setupApiKey.trim() || !invoke) return;
+    if (!setupApiKey.trim()) return;
     
     try {
       if (logInfo) logInfo(`User entering API key of length ${setupApiKey.length}`);
-      await invoke('save_api_config', { apiKey: setupApiKey });
+      await commands.saveApiConfig({ apiKey: setupApiKey });
       hasApiKey = true;
       showSetup = false;
       setupApiKey = '';
@@ -245,7 +234,7 @@
     isStreaming = true;
 
     try {
-      await invoke('send_streaming_message', {
+      await commands.sendStreamingMessage({
         message: messageToSend,
       });
     } catch (error) {
@@ -265,11 +254,11 @@
           console.log("🔧 [MODELS] User requested models list");
         }
         if (logInfo) logInfo('User requested models list');
-        const models = await invoke('get_available_models');
+        const models = await commands.getAvailableModels();
         if (debugLevels.models) {
           console.log("🔧 [MODELS] Retrieved models count:", models.length);
         }
-        const currentModel = await invoke('get_current_model');
+        const currentModel = await commands.getCurrentModel();
         if (debugLevels.models) {
           console.log("🔧 [MODELS] Current model:", currentModel);
         }
@@ -299,7 +288,7 @@
         if (logInfo) logInfo(`User switching to model: ${modelId}`);
         
         try {
-          await invoke('set_preferred_model', { model: modelId });
+          await commands.setPreferredModel({ model: modelId });
           await loadCurrentModel(); // Refresh current model display
           messages = [...messages, { 
             type: 'assistant', 
@@ -363,10 +352,8 @@
   }
 
   async function loadAvailableModels() {
-    if (!invoke) return;
-    
     try {
-      const models = await invoke('get_available_models');
+      const models = await commands.getAvailableModels();
       spotlight.setAvailableModels(models);
     } catch (error) {
       console.error('Failed to load available models:', error);
