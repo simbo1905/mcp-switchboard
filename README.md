@@ -320,18 +320,53 @@ cd mcp-switchboard-ui && npm install && npm run build
 
 **Driver scripts coordinate but never replace module logic.**
 
-**Automated Build Scripts:**
-- `clean_modules.sh` - Dependency-aware module cleaning with verification
-  - `TARGETS=module1,module2 ./clean_modules.sh` - Clean specific modules
-  - `./clean_modules.sh` - Clean all modules in dependency order (mcp-switchboard-ui → binding-generator → mcp-core)
-  - Removes cargo target directories, build artifacts, TypeScript bindings, and node_modules
-  - Verifies complete clean state before completion
-- `generate-build-fingerprint.sh` - Generates SHA256 fingerprint from module source files
-- `perfect-mcp-core.sh` - Builds, tests, and lints the mcp-core library with fingerprint generation
-- `perfect-binding-generator.sh` - Builds and tests the binding generator with dependency verification  
-- `test-full-build.sh` - Tests complete build pipeline with fingerprint verification
-- `validate-fingerprints.sh` - Validates fingerprint generation, change detection, and dependency verification
-- All scripts handle process management with PID files and display build metadata for observability
+## Development Commands
+
+**CRITICAL**: You must always only run the `just` commands to do any steps that should run the full process in an idempotent and repeatable manner.
+
+**Primary Build Commands:**
+```bash
+just           # Show all available recipes
+just clean     # Clean all modules in reverse dependency order
+just build     # Full build pipeline with proper dependency order
+just test      # Run all tests (Rust + TypeScript)
+just dev       # Development mode with file watching
+just validate  # Validate build integrity and fingerprints
+```
+
+**Module-Specific Commands:**
+```bash
+just build-core        # Build mcp-core library only
+just generate-bindings # Generate TypeScript bindings from Rust
+just build-ui          # Build UI with generated bindings
+just test-core         # Test mcp-core only
+just test-ui           # Test UI only
+```
+
+**Development Utilities:**
+```bash
+just status      # Check all module build status
+just deps        # Show module dependency graph
+just rebuild     # Clean and rebuild everything
+just watch       # Watch mode for continuous builds
+just approve RECIPE  # Run any recipe with approval wrapper
+```
+
+**npm vs just Separation:**
+- **`just`**: Build orchestration, multi-module coordination, dependency management
+- **`npm`**: Frontend package management only (Vite, Vitest, SvelteKit tools)
+
+```bash
+# ✅ Correct: Use just for build orchestration
+just build     # Coordinates all modules
+just test      # Runs both Rust and TypeScript tests
+just dev       # Manages development workflow
+
+# ✅ Also correct: Direct frontend tools (IDE integration)
+npm run dev    # Vite dev server only
+npm test       # Vitest only  
+npm run check  # TypeScript checking only
+```
 
 **Build Fingerprinting System:**
 - **Embedded in cargo build**: Uses build.rs scripts to generate fingerprints during cargo build
@@ -362,90 +397,58 @@ cd mcp-switchboard-ui && npm install && npm run build
 
 ## README-Driven Development (RDD) Roadmap
 
-### Phase 0: Shared Library Architecture Migration 🔧
-- [x] Create workspace root Cargo.toml
-- [x] Extract commands to mcp-core library
-  - [x] Move all command functions from src-tauri/src/main.rs to mcp-core/src/lib.rs
-  - [x] Keep them as public functions, not in main()
-  - [x] Include all Type derives and specta attributes
-- [x] Create binding-generator binary
-  - [x] Minimal main.rs that imports mcp-core
-  - [x] Uses tauri-specta Builder to collect commands from mcp-core
-  - [x] Exports TypeScript bindings to ../mcp-switchboard-ui/src/bindings.ts
-  - [x] Exits immediately after generation
-- [x] Update main app to use mcp-core
-  - [x] Import commands from mcp-core library
-  - [x] Remove duplicate command definitions
-  - [x] Use mcp-core commands in Tauri builder
-- [x] Update package.json scripts
-  - [x] generate-bindings: `cd ../binding-generator && cargo run`
-  - [x] clean: removes src/bindings.ts
-  - [x] test:types: runs TypeScript tests against generated bindings
-  - [x] tauri:build: normal Tauri build using the generated bindings
-- [x] Create automated build scripts with build verification
-  - [x] perfect-mcp-core.sh: Builds, tests, lints mcp-core library
-  - [x] perfect-binding-generator.sh: Builds and tests binding generator
-  - [x] test-full-build.sh: Tests complete build pipeline with timestamp verification
-    - Runs clean/test cycle of all modules in correct order
-    - Verifies fresh artifacts are passed between build steps
-    - Confirms build order dependencies: mcp-core → bindings → tauri-app
-- [x] Implement build fingerprinting system
-  - [x] Create build.rs scripts for each module that generate SHA256 fingerprints during cargo build
-  - [x] Write build metadata (fingerprint, timestamp, git commit) to `/tmp/build-info-{module}.json`
-  - [x] Create properties files `/tmp/build-{module}.properties` for shell script access
-  - [x] Inject build fingerprint comments into generated TypeScript bindings
-  - [x] Add `get_build_info()` API endpoint exposing build metadata to frontend
-  - [x] Add dependency verification: downstream modules verify upstream fingerprints in build.rs
-  - [x] Panic on missing/mismatched dependencies during cargo build (cannot be bypassed)
-  - [x] Create `validate-fingerprints.sh` to test fingerprint generation and change detection
-- [x] Complete type-safe integration
-  - [x] Manual TypeScript bindings with full type safety (tauri-specta v2 RC)
-  - [x] Type-safe command wrapper in `src/lib/tauri.ts`
-  - [x] Complete mock system for testing in `src/lib/testing/mockTauri.ts`
-  - [x] Migration from raw `invoke()` calls to typed `commands.*()` API
-  - [x] Reactive store pattern for multi-component state updates
-  - [x] All 57 tests passing with zero TypeScript compile errors
-- [x] Migrate build orchestration to Just command runner
-  - [x] Install just: `cargo install just`
-  - [x] Create justfile with all build recipes and proper dependencies
-  - [x] Create approval wrapper script for command tracking with PID files
-  - [x] Port existing shell scripts to just recipes
-  - [x] Create validate_just_idempotent_integrity.sh for build validation
-  - [x] Test full just-based build pipeline is water-tight and idempotent
+### Current Development (GitHub Issues)
 
-### Phase 1: Secure Foundation ✅
-- [x] Environment variable support for development
-- [x] Encrypted config file storage
-- [x] Platform-appropriate config directories
-- [x] AES-256-GCM encryption implementation
-- [x] Machine-specific key derivation
-- [x] Tauri filesystem permissions
-- [x] Config management API endpoints
-- [ ] Frontend config integration
-- [ ] Setup modal for initial configuration
-- [ ] Settings UI for key management
+**Issue #4: Comprehensive Build Version Tracking and E2E Display System** 
+- [ ] **Phase 1: Version Generation**
+  - [ ] Update all `build.rs` scripts to generate comprehensive version properties 
+  - [ ] Create `/tmp/build-{module}.properties` with commit hash, timestamp, headline, fingerprint
+  - [ ] Update justfile recipes to log version info during builds
+- [ ] **Phase 2: Rust Integration**
+  - [ ] Add `build_info` module to mcp-core with embedded build constants
+  - [ ] Expose version info through Tauri commands  
+  - [ ] Add Rust tests for build info availability
+- [ ] **Phase 3: TypeScript Integration**
+  - [ ] Generate `src/lib/build-info.ts` with embedded version constants
+  - [ ] Inject build info into generated TypeScript bindings
+  - [ ] Create frontend utility to access all module versions
+- [ ] **Phase 4: E2E Access**
+  - [ ] Expose `window.__BUILD_INFO__()` function in Tauri app
+  - [ ] Add build info to development server
+  - [ ] Create comprehensive E2E test validating version propagation  
+- [ ] **Phase 5: Just Build System Integration**
+  - [ ] Update all just recipes to display version info
+  - [ ] Add `just versions` recipe to show all module versions
+  - [ ] Ensure build logs include complete version audit trail
 
-### Phase 2: Enhanced Security 🔲
+**Target: Maven-like version management with Spring Boot Actuator-style accessibility**
+
+### Completed Architecture ✅
+
+**Shared Library Architecture & Build System:**
+- Multi-module workspace: mcp-core → binding-generator → mcp-switchboard-ui
+- Build fingerprinting system embedded in cargo build.rs scripts
+- Type-safe integration with manual TypeScript bindings
+- Just-based build orchestration with Maven-like dependency management
+- Water-tight system with dependency verification that cannot be bypassed
+
+**Security Foundation:**
+- Environment variable support for development
+- Encrypted config file storage with AES-256-GCM
+- Platform-appropriate config directories with machine-specific keys
+- Tauri filesystem permissions and config management API endpoints
+
+### Future Roadmap
+
+**Security Enhancements:**
 - [ ] System keychain integration (tauri-plugin-keyring)
-- [ ] Automatic migration from config files to keychain
-- [ ] Stronghold integration for additional secrets
-- [ ] Key rotation mechanism
-- [ ] Audit logging system
-- [ ] Security compliance documentation
+- [ ] Frontend config integration with setup modal
+- [ ] Key rotation mechanism and audit logging
 
-### Phase 3: Advanced Features 🔲
+**Advanced Features:**
 - [ ] Multi-provider API key support
 - [ ] Team/organization config sharing
 - [ ] Cloud config synchronization
-- [ ] Hardware security module (HSM) support
-- [ ] Zero-knowledge architecture option
-
-### Phase 4: Enterprise Features 🔲
-- [ ] Active Directory integration
-- [ ] SAML/SSO authentication
-- [ ] Compliance reporting (SOC2, GDPR)
-- [ ] Centralized policy management
-- [ ] Advanced threat detection
 
 ## Security Best Practices Implemented
 
