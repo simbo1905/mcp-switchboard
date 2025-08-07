@@ -2255,9 +2255,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "specta",
  "tauri",
- "tauri-specta",
  "tokio",
  "walkdir",
 ]

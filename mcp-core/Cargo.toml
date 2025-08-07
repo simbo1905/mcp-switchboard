@@ -13,8 +13,6 @@ anyhow = "1.0"
 
 # Tauri ecosystem
 tauri = "2.3.0"
-specta = "2.0.0-rc.20"
-tauri-specta = "2.0.0-rc.20"
 
 # AI integration
 async-openai = "0.28"

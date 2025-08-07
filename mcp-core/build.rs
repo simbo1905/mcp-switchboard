@@ -9,13 +9,26 @@ fn main() {
     // Generate build fingerprint from source files
     let fingerprint = generate_fingerprint();
     let git_commit = get_git_commit();
+    let git_headline = get_git_headline();
     let build_time = chrono::Utc::now().to_rfc3339();
+    
+    // Write embedded constants to OUT_DIR for include_str!
+    let out_dir = env::var("OUT_DIR").unwrap();
+    fs::write(format!("{}/fingerprint.txt", out_dir), &fingerprint)
+        .expect("Failed to write fingerprint constant");
+    fs::write(format!("{}/git_commit.txt", out_dir), &git_commit)
+        .expect("Failed to write git commit constant");
+    fs::write(format!("{}/git_headline.txt", out_dir), &git_headline)
+        .expect("Failed to write git headline constant");
+    fs::write(format!("{}/build_time.txt", out_dir), &build_time)
+        .expect("Failed to write build time constant");
     
     // Create build info JSON
     let build_info = serde_json::json!({
         "module": "mcp-core",
         "fingerprint": fingerprint,
         "git_commit": git_commit,
+        "git_headline": git_headline,
         "build_time": build_time,
         "dependencies": []
     });
@@ -26,8 +39,8 @@ fn main() {
 
     // Write properties file for shell scripts
     let props = format!(
-        "MODULE=mcp-core\nFINGERPRINT={}\nGIT_SHA={}\nBUILD_TIME={}\n",
-        fingerprint, git_commit, build_time
+        "MODULE=mcp-core\nFINGERPRINT={}\nGIT_SHA={}\nGIT_HEADLINE={}\nBUILD_TIME={}\n",
+        fingerprint, git_commit, git_headline, build_time
     );
     fs::write("/tmp/build-mcp-core.properties", props)
         .expect("Failed to write build properties");
@@ -76,6 +89,14 @@ fn generate_fingerprint() -> String {
 fn get_git_commit() -> String {
     Command::new("git")
         .args(&["rev-parse", "--short", "HEAD"])
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn get_git_headline() -> String {
+    Command::new("git")
+        .args(&["log", "-1", "--pretty=%s"])
         .output()
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
         .unwrap_or_else(|_| "unknown".to_string())

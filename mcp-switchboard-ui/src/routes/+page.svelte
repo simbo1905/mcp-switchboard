@@ -4,6 +4,7 @@
   import { SpotlightSearchImpl, type ModelInfo } from '$lib/spotlight';
   import { HelpSystem } from '$lib/help-system';
   import { commands } from '$lib/tauri';
+  import { exposeBuildInfo, logBuildInfo } from '$lib/build-info';
 
 
   async function logInfo(message: string) {
@@ -138,6 +139,10 @@
     }
     
     registerDebugInterface();
+    
+    // Initialize build info for E2E access
+    exposeBuildInfo();
+    logBuildInfo();
     
     if (browser) {
       if (debugLevels.startup) {

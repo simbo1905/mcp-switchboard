@@ -32,6 +32,9 @@ build.log
 env-test.log
 tauri-test.log
 
+# Build runtime directory (persistent build state)
+build-runtime/
+
 # Tauri build output
 src-tauri/target/
 

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use specta::Type;
 use tauri::Emitter;
 use futures::stream::StreamExt;
 use async_openai::Client;
@@ -7,47 +6,38 @@ use async_openai::config::OpenAIConfig;
 
 // Re-export everything needed by consumers
 pub use config::ConfigManager;
+pub use build_info::{BuildInfo, DependencyInfo};
 
 mod config;
+mod build_info;
 
-#[derive(Serialize, Deserialize, Clone, Type)]
-#[specta(export)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ModelInfo {
     pub id: String,
     pub display_name: String,
     pub organization: String,
 }
 
-#[derive(Serialize, Deserialize, Type)]
-#[specta(export)]
+#[derive(Serialize, Deserialize)]
 pub struct ApiError {
     pub message: String,
     pub code: Option<String>,
 }
 
 // Event payload types 
-#[derive(Serialize, Type)]
-#[specta(export)]
+#[derive(Serialize)]
 pub struct ChatStreamPayload {
     pub content: String,
 }
 
-impl tauri_specta::Event for ChatStreamPayload {
-    const NAME: &'static str = "chat-stream";
-}
 
-#[derive(Serialize, Type)]
-#[specta(export)]
+#[derive(Serialize)]
 pub struct ChatErrorPayload {
     pub error: String,
 }
 
-impl tauri_specta::Event for ChatErrorPayload {
-    const NAME: &'static str = "chat-error";
-}
 
 #[tauri::command]
-#[specta::specta]
 pub async fn get_api_config() -> Result<Option<String>, String> {
     log::debug!("Frontend requested API configuration");
     let config_manager = ConfigManager::new().map_err(|e| {
@@ -61,7 +51,6 @@ pub async fn get_api_config() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-#[specta::specta]
 pub async fn save_api_config(api_key: String) -> Result<(), String> {
     log::info!("Frontend requested to save API configuration");
     let config_manager = ConfigManager::new().map_err(|e| {
@@ -75,7 +64,6 @@ pub async fn save_api_config(api_key: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-#[specta::specta]
 pub async fn has_api_config() -> Result<bool, String> {
     log::info!("Frontend checking if API configuration exists");
     log::info!("Current working directory: {:?}", std::env::current_dir());
@@ -96,14 +84,12 @@ pub async fn has_api_config() -> Result<bool, String> {
 }
 
 #[tauri::command]
-#[specta::specta]
 pub async fn log_info(message: String) -> Result<(), String> {
     log::info!("[Frontend] {}", message);
     Ok(())
 }
 
 #[tauri::command]
-#[specta::specta]
 pub async fn get_available_models() -> Result<Vec<ModelInfo>, String> {
     log::info!("Fetching available models from Together.ai API");
     
@@ -164,7 +150,6 @@ pub async fn get_available_models() -> Result<Vec<ModelInfo>, String> {
 }
 
 #[tauri::command]
-#[specta::specta]
 pub async fn get_current_model() -> Result<String, String> {
     log::info!("Getting current preferred model");
     let config_manager = ConfigManager::new().map_err(|e| {
@@ -178,7 +163,6 @@ pub async fn get_current_model() -> Result<String, String> {
 }
 
 #[tauri::command]
-#[specta::specta]
 pub async fn set_preferred_model(model: String) -> Result<(), String> {
     log::info!("Setting preferred model to: {}", model);
     let config_manager = ConfigManager::new().map_err(|e| {
@@ -192,7 +176,6 @@ pub async fn set_preferred_model(model: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-#[specta::specta]
 pub async fn send_streaming_message(
     message: String,
     window: tauri::Window,
@@ -264,61 +247,7 @@ pub async fn send_streaming_message(
 }
 
 #[tauri::command]
-#[specta::specta]
 pub async fn get_build_info() -> Result<BuildInfo, String> {
     let build_info = BuildInfo::load().map_err(|e| e.to_string())?;
     Ok(build_info)
-}
-
-#[derive(Serialize, Deserialize, Clone, Type)]
-#[specta(export)]
-pub struct BuildInfo {
-    pub module: String,
-    pub fingerprint: String,
-    pub git_commit: String,
-    pub build_time: String,
-    pub dependencies: Vec<DependencyInfo>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Type)]
-#[specta(export)]
-pub struct DependencyInfo {
-    pub module: String,
-    pub fingerprint: String,
-    pub verified: bool,
-}
-
-impl BuildInfo {
-    pub fn load() -> anyhow::Result<BuildInfo> {
-        // Load build info from embedded data or file
-        let build_info_path = "/tmp/build-info-mcp-core.json";
-        if std::path::Path::new(build_info_path).exists() {
-            let data = std::fs::read_to_string(build_info_path)?;
-            let mut build_info: BuildInfo = serde_json::from_str(&data)?;
-            
-            // Load dependency information
-            build_info.dependencies = vec![]; // mcp-core has no dependencies
-            
-            Ok(build_info)
-        } else {
-            // Fallback for when build info file doesn't exist
-            Ok(BuildInfo {
-                module: "mcp-core".to_string(),
-                fingerprint: "development".to_string(),
-                git_commit: "unknown".to_string(),
-                build_time: "unknown".to_string(),
-                dependencies: vec![],
-            })
-        }
-    }
-    
-    pub fn log_startup_info(&self) {
-        log::info!("=== MCP-CORE BUILD INFO ===");
-        log::info!("Module: {}", self.module);
-        log::info!("Build fingerprint: {}", self.fingerprint);
-        log::info!("Git commit: {}", self.git_commit);
-        log::info!("Build time: {}", self.build_time);
-        log::info!("Dependencies verified: {}", self.dependencies.iter().all(|d| d.verified));
-        log::info!("========================");
-    }
 }

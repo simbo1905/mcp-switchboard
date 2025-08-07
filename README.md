@@ -322,6 +322,8 @@ cd mcp-switchboard-ui && npm install && npm run build
 
 ## Development Commands
 
+**CURRENT WORK**: Fixing Rust macro conflicts (E0255 duplicate `#[tauri::command]` errors) preventing mcp-core compilation. The Issue #4 build version tracking system generates proper fingerprints and version properties, but duplicate command definitions between `/mcp-core/src/lib.rs` and `/mcp-switchboard-ui/src-tauri/src/bin/generate-bindings.rs` prevent compilation completion.
+
 **CRITICAL**: You must always only run the `just` commands to do any steps that should run the full process in an idempotent and repeatable manner.
 
 **Primary Build Commands:**
@@ -351,6 +353,29 @@ just rebuild     # Clean and rebuild everything
 just watch       # Watch mode for continuous builds
 just approve RECIPE  # Run any recipe with approval wrapper
 ```
+
+### **Build Process Monitoring**
+
+**Problem**: Long build times require monitoring and status visibility  
+**Solution**: Comprehensive build process tracking with persistent state
+
+**Implementation:**
+- **PID Files**: `build-runtime/{command}.pid` for process tracking
+- **Log Files**: `build-runtime/{command}.log` for output capture  
+- **Status Script**: `scripts/check-build.sh` for unified monitoring
+- **Conventions**: Predictable naming enables reliable automation
+
+**Usage:**
+```bash
+./scripts/check-build.sh    # Check all build processes
+tail -f build-runtime/build-core.log  # Follow specific build
+```
+
+**Why In-Project Storage:**
+- **Persistence**: Survives terminal sessions and system reboots
+- **Portability**: Works across different development environments  
+- **Git Integration**: `.gitignore`d but tracked in repository structure
+- **Team Collaboration**: Consistent paths for all developers
 
 **npm vs just Separation:**
 - **`just`**: Build orchestration, multi-module coordination, dependency management

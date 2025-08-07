@@ -37,6 +37,7 @@ fn main() {
     // Generate our own fingerprint
     let fingerprint = generate_fingerprint(&mcp_core_fingerprint, &binding_gen_fingerprint);
     let git_commit = get_git_commit();
+    let git_headline = get_git_headline();
     let build_time = chrono::Utc::now().to_rfc3339();
     
     // Create build info with dependency verification
@@ -44,6 +45,7 @@ fn main() {
         "module": "mcp-switchboard-ui",
         "fingerprint": fingerprint,
         "git_commit": git_commit,
+        "git_headline": git_headline,
         "build_time": build_time,
         "dependencies": [
             {
@@ -64,8 +66,8 @@ fn main() {
         .expect("Failed to write build info JSON");
 
     let props = format!(
-        "MODULE=mcp-switchboard-ui\nFINGERPRINT={}\nGIT_SHA={}\nBUILD_TIME={}\nMCP_CORE_FINGERPRINT={}\nBINDING_GEN_FINGERPRINT={}\n",
-        fingerprint, git_commit, build_time, mcp_core_fingerprint, binding_gen_fingerprint
+        "MODULE=mcp-switchboard-ui\nFINGERPRINT={}\nGIT_SHA={}\nGIT_HEADLINE={}\nBUILD_TIME={}\nMCP_CORE_FINGERPRINT={}\nBINDING_GEN_FINGERPRINT={}\n",
+        fingerprint, git_commit, git_headline, build_time, mcp_core_fingerprint, binding_gen_fingerprint
     );
     fs::write("/tmp/build-mcp-switchboard-ui.properties", props)
         .expect("Failed to write build properties");
@@ -136,6 +138,14 @@ fn generate_fingerprint(mcp_core_fingerprint: &str, binding_gen_fingerprint: &st
 fn get_git_commit() -> String {
     Command::new("git")
         .args(&["rev-parse", "--short", "HEAD"])
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn get_git_headline() -> String {
+    Command::new("git")
+        .args(&["log", "-1", "--pretty=%s"])
         .output()
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
         .unwrap_or_else(|_| "unknown".to_string())
