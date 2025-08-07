@@ -99,3 +99,36 @@ deps:
     @echo "  binding-generator"
     @echo "    ↓"
     @echo "  mcp-switchboard-ui"
+
+# Install just via npm (for team consistency)
+setup-just:
+    npm install --save-dev just-install
+    npx just-install
+    @echo "✅ just installed locally via npm"
+
+# Run tests with coverage
+test-coverage:
+    cd mcp-core && cargo test
+    cd mcp-switchboard-ui && npm run test:coverage
+    @echo "✅ Coverage reports generated"
+
+# Check all module statuses
+status:
+    @echo "📊 Module Status:"
+    @echo "  mcp-core: $(ls -la mcp-core/target/release/libmcp_core*.rlib 2>/dev/null | wc -l) artifacts"
+    @echo "  binding-generator: $(ls -la binding-generator/target/release/binding-generator 2>/dev/null | wc -l) artifacts"
+    @echo "  TypeScript bindings: $([ -f mcp-switchboard-ui/src/bindings.ts ] && echo 'present' || echo 'missing')"
+    @echo "  Build info files: $(ls -la /tmp/build-info-*.json 2>/dev/null | wc -l) files"
+
+# Watch mode for development
+watch:
+    @echo "👀 Starting watch mode..."
+    watchexec -w mcp-core/src -w binding-generator/src -w mcp-switchboard-ui/src -- just build
+
+# Clean and rebuild everything
+rebuild: clean build validate
+    @echo "🔄 Complete rebuild finished"
+
+# Run with approval wrapper
+approve RECIPE:
+    ./run_with_approval.sh {{RECIPE}}

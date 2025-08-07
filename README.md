@@ -54,28 +54,53 @@ A secure Tauri desktop application providing a chat interface for streaming AI c
 # Clone and setup
 git clone <repository>
 cd mcp-switchboard/mcp-switchboard-ui
-npm install
+npm install  # This automatically installs just via postinstall hook
 
-# Lima Testing Setup (one-time setup for cross-platform testing)
-./lima-manager.sh setup   # Auto-detects default instance architecture (VZ/aarch64 or QEMU/x86_64)
-                          # Installs Node.js, Rust, tauri-driver in Linux VM (~3-5 minutes)
-./lima-manager.sh verify  # Validates test environment is ready
+# Verify just is available
+just --version
 
-# Testing Commands
-npm test                  # Fast local tests (frontend + backend unit tests)
-npm run verify           # Full integration tests with Lima E2E testing
+# Build Commands (all orchestrated by just)
+just build     # Full build pipeline
+just test      # Run all tests
+just clean     # Clean all artifacts
+just dev       # Development mode
+just validate  # Validate build integrity
 
 # Development with environment variable
-TOGETHERAI_API_KEY=your_key_here npm run tauri dev
+TOGETHERAI_API_KEY=your_key_here just dev
 
 # Or configure via UI (production-like)
-npm run tauri dev
+just dev
+```
+
+#### Team Setup (Automatic just Installation)
+If you're on a team and want just installed automatically:
+```bash
+npm install  # This will install just via postinstall hook
+just --version  # Verify just is available
+```
+
+#### Build Commands
+All build orchestration is handled by `just`, not npm:
+```bash
+just build     # Full build pipeline
+just test      # Run all tests
+just clean     # Clean all artifacts
+just dev       # Development mode
+just validate  # Validate build integrity
+```
+
+Frontend-only npm scripts (for IDE integration):
+```bash
+npm run dev    # Vite dev server only
+npm test       # Vitest only
+npm run check  # TypeScript checking only
 ```
 
 ### Build for Production
 
 ```bash
-npm run tauri build
+just build     # Complete build pipeline with validation
 ```
 
 ### Lima Testing Troubleshooting
@@ -273,10 +298,10 @@ just validate  # Validate build integrity and fingerprints
 
 **Build Process:**
 ```bash
-npm run clean              # Delegates to each module's clean command
-npm run generate-bindings  # Run binding-generator binary → outputs bindings.ts  
-npm run test:types         # Test frontend against generated bindings
-npm run tauri:build        # Build full app using same bindings
+just clean                 # Clean all modules in reverse dependency order
+just generate-bindings     # Run binding-generator binary → outputs bindings.ts  
+just test                  # Test all modules (frontend + backend)
+just build                 # Build full app using generated bindings
 ```
 
 ### Module Commands (Direct Usage)
