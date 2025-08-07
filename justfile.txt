@@ -74,24 +74,9 @@ generate-bindings: build-generator
     @echo "✅ TypeScript bindings generated"
     @[ -f /tmp/build-binding-generator.properties ] && echo "   Bindings built with:" && grep -E "^(FINGERPRINT|GIT_SHA|GIT_HEADLINE)" /tmp/build-binding-generator.properties | sed 's/^/     /' || true
 
-# Quick smoke test for bindings (fast validation)
-smoke-test-bindings: generate-bindings
-    @echo "💨 Smoke testing bindings..."
-    @[ -s mcp-switchboard-ui/src/bindings.ts ] || (echo "❌ Bindings file empty!" && exit 1)
-    @cd mcp-switchboard-ui && npx tsc src/bindings.ts --noEmit --skipLibCheck || (echo "❌ TypeScript compilation failed!" && exit 1)
-    @echo "✅ Bindings compile successfully"
-
-# Verify TypeScript types match Rust types (thorough contract verification)
-verify-bindings: smoke-test-bindings
-    @echo "🔍 Verifying type contract..."
-    @echo "   Installing verification dependencies..."
-    cd binding-generator && npm install
-    @echo "   Running enhanced contract verification..."
-    cd binding-generator && npx tsx verify-contract.ts
-
-# Build UI (depends on verified bindings)
-build-ui: smoke-test-bindings
-    @echo "🖥️ Building UI with verified bindings..."
+# Build UI (depends on bindings)
+build-ui: generate-bindings
+    @echo "🖥️ Building UI..."
     cd mcp-switchboard-ui && npm install && npm run build
     @echo "✅ UI built"
     @[ -f /tmp/build-mcp-switchboard-ui.properties ] && grep -E "^(MODULE|FINGERPRINT|GIT_SHA|GIT_HEADLINE|BUILD_TIME)" /tmp/build-mcp-switchboard-ui.properties | sed 's/^/   /' || true

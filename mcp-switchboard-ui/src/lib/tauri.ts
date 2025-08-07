@@ -17,8 +17,39 @@ declare global {
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { listen as tauriListen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { Commands, TauriEvents } from './bindings';
-import { COMMAND_NAMES } from './bindings';
+import type { ModelInfo } from '../bindings';
+
+// Define command interfaces (simplified - no longer generated)
+interface Commands {
+    getApiConfig(): Promise<string | null>;
+    saveApiConfig(args: { apiKey: string }): Promise<void>;
+    hasApiConfig(): Promise<boolean>;
+    sendStreamingMessage(args: { message: string }): Promise<void>;
+    logInfo(args: { message: string }): Promise<void>;
+    getAvailableModels(): Promise<ModelInfo[]>;
+    getCurrentModel(): Promise<string>;
+    setPreferredModel(args: { model: string }): Promise<void>;
+    getBuildInfo(): Promise<any>; // BuildInfo type
+}
+
+interface TauriEvents {
+    'chat-stream': { content: string };
+    'chat-complete': {};
+    'chat-error': { error: string };
+}
+
+// Command names for invoke calls
+const COMMAND_NAMES = {
+    getApiConfig: 'get_api_config',
+    saveApiConfig: 'save_api_config', 
+    hasApiConfig: 'has_api_config',
+    sendStreamingMessage: 'send_streaming_message',
+    logInfo: 'log_info',
+    getAvailableModels: 'get_available_models',
+    getCurrentModel: 'get_current_model',
+    setPreferredModel: 'set_preferred_model',
+    getBuildInfo: 'get_build_info'
+} as const;
 
 // Environment detection
 export const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined;
@@ -64,8 +95,12 @@ class TauriCommands implements Commands {
         return this.safeInvoke<void>(COMMAND_NAMES.logInfo, args);
     }
 
-    async getAvailableModels(): Promise<import('./bindings').ModelInfo[]> {
-        return this.safeInvoke<import('./bindings').ModelInfo[]>(COMMAND_NAMES.getAvailableModels);
+    async getAvailableModels(): Promise<ModelInfo[]> {
+        return this.safeInvoke<ModelInfo[]>(COMMAND_NAMES.getAvailableModels);
+    }
+
+    async getBuildInfo(): Promise<any> {
+        return this.safeInvoke<any>(COMMAND_NAMES.getBuildInfo);
     }
 
     async getCurrentModel(): Promise<string> {

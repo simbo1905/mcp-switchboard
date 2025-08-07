@@ -11,8 +11,6 @@ tokio = { version = "1.0", features = ["full"] }
 log = "0.4"
 anyhow = "1.0"
 
-# Tauri ecosystem
-tauri = "2.3.0"
 
 # AI integration
 async-openai = "0.28"

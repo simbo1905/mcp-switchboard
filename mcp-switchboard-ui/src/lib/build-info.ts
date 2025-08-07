@@ -32,19 +32,19 @@ export interface AllModulesInfo {
  */
 export const BUILD_INFO: BuildInfo = {
   module: 'mcp-switchboard-ui',
-  fingerprint: '__BUILD_FINGERPRINT__',
-  git_commit: '__GIT_COMMIT__', 
-  git_headline: '__GIT_HEADLINE__',
-  build_time: '__BUILD_TIME__',
+  fingerprint: 'ui-6f2d331-me1n3dbd',
+  git_commit: '6f2d331', 
+  git_headline: 'delete dead files',
+  build_time: '2025-08-07T16:56:57.227Z',
   dependencies: [
     {
       module: 'mcp-core',
-      fingerprint: '__MCP_CORE_FINGERPRINT__',
+      fingerprint: '9aa1355bd3dc9a4cd1b8e26696ce66f67d0b23af953b2bda8b3c8b9bdc7e22d2',
       verified: true
     },
     {
       module: 'binding-generator', 
-      fingerprint: '__BINDING_GEN_FINGERPRINT__',
+      fingerprint: 'b1882a913efe645b7beb10276d52707548f1f74207473d01802c2099b462166b',
       verified: true
     }
   ]

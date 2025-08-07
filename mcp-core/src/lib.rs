@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-use tauri::Emitter;
-use futures::stream::StreamExt;
+use futures::stream::{StreamExt, Stream};
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
+use std::pin::Pin;
 
 // Re-export everything needed by consumers
 pub use config::ConfigManager;
@@ -24,12 +24,19 @@ pub struct ApiError {
     pub code: Option<String>,
 }
 
-// Event payload types 
+// Stream message types for pure streaming API
+#[derive(Serialize, Clone)]
+pub enum StreamMessage {
+    Content(String),
+    Error(String),
+    Complete,
+}
+
+// Event payload types (for UI layer compatibility)
 #[derive(Serialize)]
 pub struct ChatStreamPayload {
     pub content: String,
 }
-
 
 #[derive(Serialize)]
 pub struct ChatErrorPayload {
@@ -37,7 +44,6 @@ pub struct ChatErrorPayload {
 }
 
 
-#[tauri::command]
 pub async fn get_api_config() -> Result<Option<String>, String> {
     log::debug!("Frontend requested API configuration");
     let config_manager = ConfigManager::new().map_err(|e| {
@@ -50,7 +56,6 @@ pub async fn get_api_config() -> Result<Option<String>, String> {
     })
 }
 
-#[tauri::command]
 pub async fn save_api_config(api_key: String) -> Result<(), String> {
     log::info!("Frontend requested to save API configuration");
     let config_manager = ConfigManager::new().map_err(|e| {
@@ -63,7 +68,6 @@ pub async fn save_api_config(api_key: String) -> Result<(), String> {
     })
 }
 
-#[tauri::command]
 pub async fn has_api_config() -> Result<bool, String> {
     log::info!("Frontend checking if API configuration exists");
     log::info!("Current working directory: {:?}", std::env::current_dir());
@@ -83,13 +87,13 @@ pub async fn has_api_config() -> Result<bool, String> {
     Ok(has_config)
 }
 
-#[tauri::command]
+
 pub async fn log_info(message: String) -> Result<(), String> {
     log::info!("[Frontend] {}", message);
     Ok(())
 }
 
-#[tauri::command]
+
 pub async fn get_available_models() -> Result<Vec<ModelInfo>, String> {
     log::info!("Fetching available models from Together.ai API");
     
@@ -149,7 +153,7 @@ pub async fn get_available_models() -> Result<Vec<ModelInfo>, String> {
     Ok(result)
 }
 
-#[tauri::command]
+
 pub async fn get_current_model() -> Result<String, String> {
     log::info!("Getting current preferred model");
     let config_manager = ConfigManager::new().map_err(|e| {
@@ -162,7 +166,7 @@ pub async fn get_current_model() -> Result<String, String> {
     })
 }
 
-#[tauri::command]
+
 pub async fn set_preferred_model(model: String) -> Result<(), String> {
     log::info!("Setting preferred model to: {}", model);
     let config_manager = ConfigManager::new().map_err(|e| {
@@ -175,12 +179,12 @@ pub async fn set_preferred_model(model: String) -> Result<(), String> {
     })
 }
 
-#[tauri::command]
-pub async fn send_streaming_message(
+
+pub async fn create_streaming_chat(
     message: String,
-    window: tauri::Window,
-) -> Result<(), String> {
-    log::info!("Starting streaming message request");
+) -> Result<Pin<Box<dyn Stream<Item = StreamMessage> + Send>>, String> {
+    log::info!("Creating streaming chat for message");
+    
     // Get API key from config
     let config_manager = ConfigManager::new().map_err(|e| {
         log::error!("Failed to create config manager for streaming: {}", e);
@@ -220,33 +224,35 @@ pub async fn send_streaming_message(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let mut stream = client
+    let openai_stream = client
         .chat()
         .create_stream(request)
         .await
         .map_err(|e| e.to_string())?;
 
-    while let Some(result) = stream.next().await {
+    // Transform the OpenAI stream into our StreamMessage enum
+    let message_stream = openai_stream.map(|result| {
         match result {
             Ok(response) => {
                 if let Some(choice) = response.choices.first() {
                     if let Some(content) = &choice.delta.content {
-                        window.emit("chat-stream", content).map_err(|e| e.to_string())?;
+                        StreamMessage::Content(content.clone())
+                    } else {
+                        // Empty content chunk, skip
+                        StreamMessage::Content(String::new())
                     }
+                } else {
+                    StreamMessage::Content(String::new())
                 }
             }
-            Err(e) => {
-                window.emit("chat-error", &e.to_string()).map_err(|e| e.to_string())?;
-                break;
-            }
+            Err(e) => StreamMessage::Error(e.to_string())
         }
-    }
+    }).chain(futures::stream::once(async { StreamMessage::Complete }));
 
-    window.emit("chat-complete", ()).map_err(|e| e.to_string())?;
-    Ok(())
+    Ok(Box::pin(message_stream))
 }
 
-#[tauri::command]
+
 pub async fn get_build_info() -> Result<BuildInfo, String> {
     let build_info = BuildInfo::load().map_err(|e| e.to_string())?;
     Ok(build_info)

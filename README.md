@@ -322,9 +322,196 @@ cd mcp-switchboard-ui && npm install && npm run build
 
 ## Development Commands
 
-**CURRENT WORK**: Fixing Rust macro conflicts (E0255 duplicate `#[tauri::command]` errors) preventing mcp-core compilation. The Issue #4 build version tracking system generates proper fingerprints and version properties, but duplicate command definitions between `/mcp-core/src/lib.rs` and `/mcp-switchboard-ui/src-tauri/src/bin/generate-bindings.rs` prevent compilation completion.
-
 **CRITICAL**: You must always only run the `just` commands to do any steps that should run the full process in an idempotent and repeatable manner.
+
+## Module Architecture
+
+The application follows a three-module pattern for clean separation of concerns:
+
+```
+   mcp-core                binding-generator         mcp-switchboard-ui
+   [Pure Logic]            [Type Extractor]          [Tauri App]
+        |                         |                         |
+   - Pure Rust            - Imports types           - ONLY place with
+   - NO Tauri deps          from mcp-core             #[tauri::command]
+   - Business logic       - Exports to .ts          - Thin wrappers calling
+   - Public functions     - NO mock functions         mcp-core functions
+```
+
+### Implementation Requirements
+
+**mcp-core Module:**
+- ✅ Pure Rust library with no Tauri dependencies
+- ✅ Public functions without `#[tauri::command]` macros  
+- ✅ Streaming functions return `Stream<StreamMessage>` not `tauri::Window`
+- ✅ All business logic contained here
+
+**binding-generator Module:**
+- ✅ Imports types directly from mcp-core via `use mcp_core::{...}`
+- ✅ Generates TypeScript interfaces from Rust types
+- ✅ NO duplicate function implementations or mock functions
+- ✅ Uses Rust compiler's type information
+- 🔲 Contract verification ensures TypeScript matches Rust types
+
+**mcp-switchboard-ui Module:**
+- ✅ ONLY module with `#[tauri::command]` macros
+- ✅ Thin wrapper functions that call mcp-core business logic
+- ✅ Handles Tauri-specific concerns (window events, UI integration)
+- ✅ Uses generated TypeScript bindings
+
+### Build Dependencies
+
+The modules must build in strict dependency order:
+1. `mcp-core` (pure Rust, no dependencies)
+2. `binding-generator` (depends on mcp-core types)  
+3. `mcp-switchboard-ui` (depends on generated bindings + mcp-core logic)
+
+### Implementation Guide
+
+**STEP 1: Make mcp-core Pure**
+```toml
+# mcp-core/Cargo.toml - NO tauri dependency
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+# ... other dependencies BUT NOT tauri
+```
+
+```rust
+// mcp-core/src/lib.rs - Plain public functions
+pub async fn get_api_config() -> Result<Option<String>, String> {
+    // Business logic implementation
+}
+```
+
+**STEP 2: Fix binding-generator**
+```rust
+// binding-generator/src/main.rs - Import types, export to TypeScript
+use mcp_core::{ModelInfo, ApiError, BuildInfo};
+
+fn main() {
+    // Generate TypeScript interfaces from Rust types
+    // NO mock functions - just export type definitions
+}
+```
+
+**STEP 3: Add Tauri Wrappers** 
+```rust
+// mcp-switchboard-ui/src-tauri/src/main.rs - ONLY place with commands
+#[tauri::command]
+async fn get_api_config() -> Result<Option<String>, String> {
+    mcp_core::get_api_config().await  // Call pure function
+}
+```
+
+**STEP 4: Add Contract Verification (Safety Feature)**
+
+The generated `bindings.ts` file is critical - if it's broken/empty/wrong, the main app will explode in mysterious ways. Add contract verification to ensure TypeScript types match what Rust exposes.
+
+```bash
+# Add verification dependencies to binding-generator
+cd binding-generator && npm init -y
+npm install --save-dev typescript@^5.0.0 typedoc@^0.25.0 tsx@^4.0.0
+```
+
+Create `binding-generator/verify-contract.ts`:
+```typescript
+import { readFileSync } from 'fs';
+
+interface ContractSummary {
+  functions: Set<string>;
+  types: Set<string>;
+}
+
+function extractRustContract(rustDoc: any): ContractSummary {
+  const contract = { functions: new Set<string>(), types: new Set<string>() };
+  
+  Object.values(rustDoc.index || {}).forEach((item: any) => {
+    if (item.visibility === 'public') {
+      if (item.kind === 'function') contract.functions.add(item.name);
+      if (item.kind === 'struct' || item.kind === 'enum') contract.types.add(item.name);
+    }
+  });
+  
+  return contract;
+}
+
+function extractTsContract(tsDoc: any): ContractSummary {
+  const contract = { functions: new Set<string>(), types: new Set<string>() };
+  
+  tsDoc.children?.forEach((item: any) => {
+    if (item.flags?.isExported) {
+      if (item.kind === 64) contract.functions.add(item.name);
+      if (item.kind === 256 || item.kind === 128) contract.types.add(item.name);
+    }
+  });
+  
+  return contract;
+}
+
+// Verify contracts match
+const rustTypes = JSON.parse(readFileSync('/tmp/rust-types.json', 'utf-8'));
+const tsTypes = JSON.parse(readFileSync('/tmp/ts-types.json', 'utf-8'));
+
+const rustContract = extractRustContract(rustTypes);
+const tsContract = extractTsContract(tsTypes);
+
+console.log(`📊 Contract Verification:`);
+console.log(`   Rust: ${rustContract.functions.size} functions, ${rustContract.types.size} types`);
+console.log(`   TypeScript: ${tsContract.functions.size} functions, ${tsContract.types.size} types`);
+
+let failed = false;
+rustContract.types.forEach(type => {
+  if (!tsContract.types.has(type)) {
+    console.error(`   ❌ Missing type in TypeScript: ${type}`);
+    failed = true;
+  }
+});
+
+if (failed) {
+  console.error(`❌ Contract verification failed!`);
+  process.exit(1);
+} else {
+  console.log(`✅ Contract verification passed!`);
+}
+```
+
+Add verification recipes to justfile:
+```bash
+# Verify the generated TypeScript matches Rust types
+verify-bindings: generate-bindings
+    @echo "🔍 Verifying type contract..."
+    cd mcp-core && cargo rustdoc --lib -- -Z unstable-options --output-format json
+    cp mcp-core/target/doc/mcp_core.json /tmp/rust-types.json
+    cd binding-generator && npx typedoc ../mcp-switchboard-ui/src/bindings.ts --json /tmp/ts-types.json
+    cd binding-generator && npx tsx verify-contract.ts
+
+# Quick smoke test (faster, less thorough)
+smoke-test-bindings:
+    @echo "💨 Smoke testing bindings..."
+    @[ -s mcp-switchboard-ui/src/bindings.ts ] || (echo "❌ Bindings file empty!" && exit 1)
+    @cd mcp-switchboard-ui && npx tsc src/bindings.ts --noEmit --skipLibCheck || (echo "❌ TypeScript compilation failed!" && exit 1)
+    @echo "✅ Bindings compile successfully"
+
+# Update build-ui to include verification
+build-ui: generate-bindings smoke-test-bindings
+    @echo "🖥️ Building UI with verified bindings..."
+    cd mcp-switchboard-ui && npm install && npm run build
+```
+
+**Contract Verification Benefits:**
+- ✅ Catches empty/corrupted bindings.ts files
+- ✅ Detects missing types lost in translation
+- ✅ Identifies TypeScript syntax errors in generated code  
+- ✅ Verifies contract between Rust exports and TypeScript imports
+- ✅ Prevents mysterious app failures from broken bindings
+
+**Build Order:**
+```bash
+just build-core        # Pure Rust library
+just build-generator   # Type extraction
+just generate-bindings # Create .ts interfaces  
+just build-ui          # Tauri app with bindings
+```
 
 **Primary Build Commands:**
 ```bash
