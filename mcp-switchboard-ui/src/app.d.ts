@@ -8,6 +8,12 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+
+	interface Window {
+		mcps?: any;
+		__TAURI__?: any;
+		__TAURI_INTERNALS__?: any;
+	}
 }
 
 export {};

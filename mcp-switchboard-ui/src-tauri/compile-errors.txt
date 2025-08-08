@@ -1,0 +1,242 @@
+
+> mcp-switchboard-ui@0.0.1 check
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: /Users/Shared/mcp-switchboard/mcp-switchboard-ui
+Getting Svelte diagnostics...
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/lib/testing/mockTauri.ts:307:5
+Error: Cannot find name 'expect'. 
+    
+    expect(calls.length).toBeGreaterThan(0);
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/lib/testing/mockTauri.ts:311:9
+Error: Cannot find name 'expect'. 
+        const lastCall = calls[calls.length - 1];
+        expect(lastCall.args).toEqual(args);
+    }
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/test-setup.ts:14:8
+Error: Cannot find name 'vi'. 
+  ...console,
+  log: vi.fn(),
+  warn: vi.fn(),
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/test-setup.ts:15:9
+Error: Cannot find name 'vi'. 
+  log: vi.fn(),
+  warn: vi.fn(),
+  info: vi.fn()
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/test-setup.ts:16:9
+Error: Cannot find name 'vi'. 
+  warn: vi.fn(),
+  info: vi.fn()
+};
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/lib/test-utils.ts:20:22
+Error: Cannot find name 'vi'. 
+  
+  const mockInvoke = vi.fn();
+  const mockListen = vi.fn();
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/lib/test-utils.ts:21:22
+Error: Cannot find name 'vi'. 
+  const mockInvoke = vi.fn();
+  const mockListen = vi.fn();
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/lib/tauri.ts:17:64
+Error: Property '__TAURI__' does not exist on type 'Window & typeof globalThis'. 
+// Environment detection
+export const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined;
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/lib/testing/typedCommands.test.ts:26:5
+Error: Cannot find name 'afterEach'. 
+
+    afterEach(() => {
+        cleanupMockTauri();
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:456:3
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+{#if spotlightVisible}
+  <div class="spotlight-overlay" on:click={hideSpotlight}>
+    <div class="spotlight-modal" on:click|stopPropagation>
+      <input
+        bind:value={spotlight.input}
+        on:keydown={handleSpotlightKeydown}
+        on:input={() => spotlight.updateCommandSuggestions()}
+        placeholder="Type command..."
+        autofocus
+      />
+      {#if spotlight.suggestions.length > 0}
+        <div class="suggestions">
+          {#each spotlight.suggestions as suggestion, index}
+            <div 
+              class="suggestion {index === spotlight.selectedIndex ? 'selected' : ''}"
+              on:click={() => executeSpotlightCommand(suggestion)}
+            >
+              {suggestion}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:456:3
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+{#if spotlightVisible}
+  <div class="spotlight-overlay" on:click={hideSpotlight}>
+    <div class="spotlight-modal" on:click|stopPropagation>
+      <input
+        bind:value={spotlight.input}
+        on:keydown={handleSpotlightKeydown}
+        on:input={() => spotlight.updateCommandSuggestions()}
+        placeholder="Type command..."
+        autofocus
+      />
+      {#if spotlight.suggestions.length > 0}
+        <div class="suggestions">
+          {#each spotlight.suggestions as suggestion, index}
+            <div 
+              class="suggestion {index === spotlight.selectedIndex ? 'selected' : ''}"
+              on:click={() => executeSpotlightCommand(suggestion)}
+            >
+              {suggestion}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:457:5
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+  <div class="spotlight-overlay" on:click={hideSpotlight}>
+    <div class="spotlight-modal" on:click|stopPropagation>
+      <input
+        bind:value={spotlight.input}
+        on:keydown={handleSpotlightKeydown}
+        on:input={() => spotlight.updateCommandSuggestions()}
+        placeholder="Type command..."
+        autofocus
+      />
+      {#if spotlight.suggestions.length > 0}
+        <div class="suggestions">
+          {#each spotlight.suggestions as suggestion, index}
+            <div 
+              class="suggestion {index === spotlight.selectedIndex ? 'selected' : ''}"
+              on:click={() => executeSpotlightCommand(suggestion)}
+            >
+              {suggestion}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:457:5
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+  <div class="spotlight-overlay" on:click={hideSpotlight}>
+    <div class="spotlight-modal" on:click|stopPropagation>
+      <input
+        bind:value={spotlight.input}
+        on:keydown={handleSpotlightKeydown}
+        on:input={() => spotlight.updateCommandSuggestions()}
+        placeholder="Type command..."
+        autofocus
+      />
+      {#if spotlight.suggestions.length > 0}
+        <div class="suggestions">
+          {#each spotlight.suggestions as suggestion, index}
+            <div 
+              class="suggestion {index === spotlight.selectedIndex ? 'selected' : ''}"
+              on:click={() => executeSpotlightCommand(suggestion)}
+            >
+              {suggestion}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:463:9
+Warn: Avoid using autofocus
+https://svelte.dev/e/a11y_autofocus (svelte)
+        placeholder="Type command..."
+        autofocus
+      />
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:468:13
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+          {#each spotlight.suggestions as suggestion, index}
+            <div 
+              class="suggestion {index === spotlight.selectedIndex ? 'selected' : ''}"
+              on:click={() => executeSpotlightCommand(suggestion)}
+            >
+              {suggestion}
+            </div>
+          {/each}
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:468:13
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+          {#each spotlight.suggestions as suggestion, index}
+            <div 
+              class="suggestion {index === spotlight.selectedIndex ? 'selected' : ''}"
+              on:click={() => executeSpotlightCommand(suggestion)}
+            >
+              {suggestion}
+            </div>
+          {/each}
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:64:51
+Error: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ startup: boolean; userInput: boolean; response: boolean; streaming: boolean; models: boolean; }'.
+  No index signature with a parameter of type 'string' was found on type '{ startup: boolean; userInput: boolean; response: boolean; streaming: boolean; models: boolean; }'. (ts)
+          if (category === 'all') {
+            Object.keys(debugLevels).forEach(k => debugLevels[k] = false);
+            console.log("🔇 All logging disabled");
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:67:13
+Error: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ startup: boolean; userInput: boolean; response: boolean; streaming: boolean; models: boolean; }'.
+  No index signature with a parameter of type 'string' was found on type '{ startup: boolean; userInput: boolean; response: boolean; streaming: boolean; models: boolean; }'. (ts)
+          } else if (debugLevels.hasOwnProperty(category)) {
+            debugLevels[category] = false;
+            console.log(`🔇 Disabled logging for: ${category}`);
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:75:51
+Error: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ startup: boolean; userInput: boolean; response: boolean; streaming: boolean; models: boolean; }'.
+  No index signature with a parameter of type 'string' was found on type '{ startup: boolean; userInput: boolean; response: boolean; streaming: boolean; models: boolean; }'. (ts)
+          if (category === 'all') {
+            Object.keys(debugLevels).forEach(k => debugLevels[k] = true);
+            console.log("🔊 All logging enabled");
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:78:13
+Error: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ startup: boolean; userInput: boolean; response: boolean; streaming: boolean; models: boolean; }'.
+  No index signature with a parameter of type 'string' was found on type '{ startup: boolean; userInput: boolean; response: boolean; streaming: boolean; models: boolean; }'. (ts)
+          } else if (debugLevels.hasOwnProperty(category)) {
+            debugLevels[category] = true;
+            console.log(`🔊 Enabled logging for: ${category}`);
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:128:14
+Error: Property 'mcps' does not exist on type 'Window & typeof globalThis'. (ts)
+      // Build and assign the API object with help method
+      window.mcps = helpSystem.buildApiObject(console);
+
+/Users/Shared/mcp-switchboard/mcp-switchboard-ui/src/routes/+page.svelte:339:7
+Error: Type 'Timeout' is not assignable to type 'number'. (ts)
+      // Set a delay before showing spotlight
+      commandTimeout = setTimeout(() => {
+        if (inputMessage.startsWith('/') && hasApiKey) {
+
+====================================
+svelte-check found 15 errors and 7 warnings in 6 files

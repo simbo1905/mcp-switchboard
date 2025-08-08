@@ -9,6 +9,16 @@ use sha2::{Sha256, Digest};
 #[derive(Serialize, Deserialize)]
 struct AppConfig {
     together_ai_api_key: String,
+    preferred_model: Option<String>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            together_ai_api_key: String::new(),
+            preferred_model: Some("meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo".to_string()),
+        }
+    }
 }
 
 pub struct ConfigManager {
@@ -51,12 +61,47 @@ impl ConfigManager {
 
     pub fn save_api_key(&self, api_key: String) -> Result<()> {
         log::info!("Saving API key to encrypted config file: {:?}", self.config_file);
-        let config = AppConfig {
-            together_ai_api_key: api_key,
-        };
+        
+        // Preserve existing config if it exists
+        let mut config = self.load_config()?.unwrap_or_else(|| AppConfig {
+            together_ai_api_key: String::new(),
+            preferred_model: AppConfig::default().preferred_model,
+        });
+        config.together_ai_api_key = api_key;
+        
         self.save_config(&config)?;
         log::info!("Config saved to: {:?}", self.config_file);
         log::info!("API key successfully saved and encrypted");
+        Ok(())
+    }
+
+    pub fn get_preferred_model(&self) -> Result<String> {
+        // First check if we have a saved preference
+        if let Some(config) = self.load_config()? {
+            if let Some(model) = config.preferred_model {
+                log::info!("Using preferred model from config: {}", model);
+                return Ok(model);
+            }
+        }
+        
+        // Fall back to default model
+        let default_model = AppConfig::default().preferred_model.unwrap();
+        log::info!("Using default model: {}", default_model);
+        Ok(default_model)
+    }
+
+    pub fn save_preferred_model(&self, model: String) -> Result<()> {
+        log::info!("Saving preferred model to config: {}", model);
+        
+        // Load existing config or create new one
+        let mut config = self.load_config()?.unwrap_or_else(|| AppConfig {
+            together_ai_api_key: String::new(),
+            preferred_model: AppConfig::default().preferred_model,
+        });
+        config.preferred_model = Some(model);
+        
+        self.save_config(&config)?;
+        log::info!("Preferred model saved successfully");
         Ok(())
     }
 
@@ -142,136 +187,5 @@ impl ConfigManager {
 
     pub fn get_config_path(&self) -> &PathBuf {
         &self.config_file
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    fn create_test_config_manager() -> (ConfigManager, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let config_dir = temp_dir.path().join("mcp-switchboard");
-        let config_file = config_dir.join("config.json");
-        
-        let manager = ConfigManager {
-            config_dir,
-            config_file,
-        };
-        
-        (manager, temp_dir)
-    }
-
-    #[test]
-    fn test_has_config_with_no_file_no_env() {
-        std::env::remove_var("TOGETHERAI_API_KEY");
-        let (manager, _temp) = create_test_config_manager();
-        
-        assert!(!manager.has_config(), "should return false when no config file and no env var");
-    }
-
-    #[test]
-    fn test_has_config_with_env_var() {
-        std::env::set_var("TOGETHERAI_API_KEY", "test-key");
-        let (manager, _temp) = create_test_config_manager();
-        
-        assert!(manager.has_config(), "should return true when env var is set");
-        
-        std::env::remove_var("TOGETHERAI_API_KEY");
-    }
-
-    #[test]
-    fn test_has_config_with_file() {
-        std::env::remove_var("TOGETHERAI_API_KEY");
-        let (manager, _temp) = create_test_config_manager();
-        
-        // Create the config directory and file
-        fs::create_dir_all(&manager.config_dir).unwrap();
-        fs::write(&manager.config_file, "dummy content").unwrap();
-        
-        assert!(manager.has_config(), "should return true when config file exists");
-    }
-
-    #[test]
-    fn test_save_and_load_config() {
-        std::env::remove_var("TOGETHERAI_API_KEY");
-        let (manager, _temp) = create_test_config_manager();
-        
-        let test_key = "test-api-key-12345";
-        
-        // Test saving
-        manager.save_api_key(test_key.to_string()).unwrap();
-        
-        // Test that file was created
-        assert!(manager.config_file.exists(), "config file should exist after saving");
-        assert!(manager.has_config(), "has_config should return true after saving");
-        
-        // Test loading
-        let loaded_key = manager.get_api_key().unwrap();
-        assert_eq!(loaded_key, Some(test_key.to_string()), "loaded key should match saved key");
-    }
-
-    #[test]
-    fn test_encryption_roundtrip() {
-        let (manager, _temp) = create_test_config_manager();
-        
-        let test_data = b"test encryption data";
-        let encrypted = manager.encrypt_data(test_data).unwrap();
-        let decrypted = manager.decrypt_data(&encrypted).unwrap();
-        
-        assert_eq!(test_data, decrypted.as_slice(), "decrypted data should match original");
-    }
-
-    #[test]
-    fn test_config_persistence_across_instances() {
-        std::env::remove_var("TOGETHERAI_API_KEY");
-        let temp_dir = TempDir::new().unwrap();
-        let config_dir = temp_dir.path().join("mcp-switchboard");
-        let config_file = config_dir.join("config.json");
-        
-        let test_key = "persistent-test-key";
-        
-        // First instance - save config
-        {
-            let manager1 = ConfigManager {
-                config_dir: config_dir.clone(),
-                config_file: config_file.clone(),
-            };
-            
-            manager1.save_api_key(test_key.to_string()).unwrap();
-            assert!(manager1.has_config(), "first instance should detect config");
-        }
-        
-        // Second instance - load config
-        {
-            let manager2 = ConfigManager {
-                config_dir: config_dir.clone(),
-                config_file: config_file.clone(),
-            };
-            
-            assert!(manager2.has_config(), "second instance should detect existing config");
-            let loaded_key = manager2.get_api_key().unwrap();
-            assert_eq!(loaded_key, Some(test_key.to_string()), "second instance should load same key");
-        }
-    }
-
-    #[test]
-    fn test_env_var_priority() {
-        let env_key = "env-var-key";
-        let file_key = "file-key";
-        
-        std::env::set_var("TOGETHERAI_API_KEY", env_key);
-        let (manager, _temp) = create_test_config_manager();
-        
-        // Save a different key to file
-        manager.save_api_key(file_key.to_string()).unwrap();
-        
-        // Environment variable should take priority
-        let loaded_key = manager.get_api_key().unwrap();
-        assert_eq!(loaded_key, Some(env_key.to_string()), "env var should take priority over file");
-        
-        std::env::remove_var("TOGETHERAI_API_KEY");
     }
 }

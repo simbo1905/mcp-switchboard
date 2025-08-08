@@ -1,0 +1,14 @@
+{
+  "name": "binding-generator",
+  "version": "0.1.0",
+  "description": "TypeScript binding generator with contract verification",
+  "private": true,
+  "scripts": {
+    "verify": "tsx verify-contract.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "tsx": "^4.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

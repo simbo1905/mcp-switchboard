@@ -1,69 +1,51 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod config;
-
+use futures::StreamExt;
 use tauri::Emitter;
-use futures::stream::StreamExt;
-use async_openai::Client;
-use async_openai::config::OpenAIConfig;
-use config::ConfigManager;
 
-#[derive(Clone, serde::Serialize)]
-struct Payload {
-  message: String,
-}
+// Import the pure business logic functions from mcp-core
+use mcp_core::{BuildInfo, StreamMessage};
 
+// Tauri command wrappers - ONLY place with #[tauri::command] macros!
 #[tauri::command]
 async fn get_api_config() -> Result<Option<String>, String> {
-    log::debug!("Frontend requested API configuration");
-    let config_manager = ConfigManager::new().map_err(|e| {
-        log::error!("Failed to create config manager: {}", e);
-        e.to_string()
-    })?;
-    config_manager.get_api_key().map_err(|e| {
-        log::error!("Failed to get API key: {}", e);
-        e.to_string()
-    })
+    mcp_core::get_api_config().await
 }
 
 #[tauri::command]
 async fn save_api_config(api_key: String) -> Result<(), String> {
-    log::info!("Frontend requested to save API configuration");
-    let config_manager = ConfigManager::new().map_err(|e| {
-        log::error!("Failed to create config manager: {}", e);
-        e.to_string()
-    })?;
-    config_manager.save_api_key(api_key).map_err(|e| {
-        log::error!("Failed to save API key: {}", e);
-        e.to_string()
-    })
+    mcp_core::save_api_config(api_key).await
 }
 
 #[tauri::command]
 async fn has_api_config() -> Result<bool, String> {
-    log::info!("Frontend checking if API configuration exists");
-    log::info!("Current working directory: {:?}", std::env::current_dir());
-    log::info!("USER env var: {:?}", std::env::var("USER"));
-    
-    let config_manager = ConfigManager::new().map_err(|e| {
-        log::error!("Failed to create config manager: {}", e);
-        e.to_string()
-    })?;
-    
-    log::info!("Config file path: {:?}", config_manager.get_config_path());
-    log::info!("Config file exists: {}", config_manager.get_config_path().exists());
-    log::info!("Environment variable TOGETHERAI_API_KEY set: {}", std::env::var("TOGETHERAI_API_KEY").is_ok());
-    
-    let has_config = config_manager.has_config();
-    log::info!("Final has_config result: {}", has_config);
-    Ok(has_config)
+    mcp_core::has_api_config().await
 }
 
 #[tauri::command]
 async fn log_info(message: String) -> Result<(), String> {
-    log::info!("[Frontend] {}", message);
-    Ok(())
+    mcp_core::log_info(message).await
+}
+
+#[tauri::command]
+async fn get_available_models() -> Result<Vec<mcp_core::ModelInfo>, String> {
+    mcp_core::get_available_models().await
+}
+
+#[tauri::command]
+async fn get_current_model() -> Result<String, String> {
+    mcp_core::get_current_model().await
+}
+
+#[tauri::command]
+async fn set_preferred_model(model: String) -> Result<(), String> {
+    mcp_core::set_preferred_model(model).await
+}
+
+#[tauri::command]
+async fn get_build_info() -> Result<BuildInfo, String> {
+    mcp_core::get_build_info().await
 }
 
 #[tauri::command]
@@ -71,62 +53,30 @@ async fn send_streaming_message(
     message: String,
     window: tauri::Window,
 ) -> Result<(), String> {
-    log::info!("Starting streaming message request");
-    // Get API key from config
-    let config_manager = ConfigManager::new().map_err(|e| {
-        log::error!("Failed to create config manager for streaming: {}", e);
-        e.to_string()
-    })?;
-    let api_key = config_manager.get_api_key().map_err(|e| {
-        log::error!("Failed to get API key for streaming: {}", e);
-        e.to_string()
-    })?.ok_or_else(|| {
-        log::error!("No API key configured for streaming");
-        "No API key configured".to_string()
-    })?;
-    let config = OpenAIConfig::new()
-        .with_api_key(api_key)
-        .with_api_base("https://api.together.xyz/v1");
-
-    let client = Client::with_config(config);
-
-    let request = async_openai::types::CreateChatCompletionRequestArgs::default()
-        .model("meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo")
-        .messages(vec![
-            async_openai::types::ChatCompletionRequestMessage::User(
-                async_openai::types::ChatCompletionRequestUserMessageArgs::default()
-                    .content(message)
-                    .build()
-                    .unwrap(),
-            ),
-        ])
-        .stream(true)
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let mut stream = client
-        .chat()
-        .create_stream(request)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(response) => {
-                if let Some(choice) = response.choices.first() {
-                    if let Some(content) = &choice.delta.content {
-                        window.emit("chat-stream", content).map_err(|e| e.to_string())?;
-                    }
+    log::info!("Starting streaming message (Tauri wrapper)");
+    
+    // Call the pure business logic function to get the stream
+    let mut stream = mcp_core::create_streaming_chat(message).await?;
+    
+    // Handle the stream and emit Tauri events
+    while let Some(stream_message) = stream.next().await {
+        match stream_message {
+            StreamMessage::Content(content) => {
+                if !content.is_empty() {
+                    window.emit("chat-stream", content).map_err(|e| e.to_string())?;
                 }
             }
-            Err(e) => {
-                window.emit("chat-error", &e.to_string()).map_err(|e| e.to_string())?;
+            StreamMessage::Error(error) => {
+                window.emit("chat-error", error).map_err(|e| e.to_string())?;
+                break;
+            }
+            StreamMessage::Complete => {
+                window.emit("chat-complete", ()).map_err(|e| e.to_string())?;
                 break;
             }
         }
     }
-
-    window.emit("chat-complete", ()).map_err(|e| e.to_string())?;
+    
     Ok(())
 }
 
@@ -141,11 +91,16 @@ fn main() {
             get_api_config,
             save_api_config,
             has_api_config,
+            log_info,
+            get_available_models,
+            get_current_model,
+            set_preferred_model,
             send_streaming_message,
-            log_info
+            get_build_info
         ])
         .setup(|_app| {
             log::info!("MCP Switchboard application starting");
+            log::info!("Pure architecture: mcp-core (business logic) + Tauri (UI integration)");
             Ok(())
         })
         .run(tauri::generate_context!())

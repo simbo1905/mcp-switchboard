@@ -29,3 +29,12 @@ vite.config.ts.timestamp-*
 # Build monitoring
 *.log
 *.pid
+
+# Lima state and testing artifacts
+.lima-state/
+e2e-artifacts/
+test-all-artifacts/
+verify-artifacts/
+
+# Tauri build output
+/src-tauri/target
