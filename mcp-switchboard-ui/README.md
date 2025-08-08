@@ -31,25 +31,24 @@ A Tauri desktop application with SvelteKit frontend that provides a chat interfa
 
 ### Quick Start
 ```sh
-# Install dependencies
-npm install
+# Install dependencies and build
+just install
+just build
 
-# Start development mode
-./dev-restart.sh
+# Run native Tauri desktop application
+just app
 
-# Stop development servers
-./dev-shutdown.sh
-
-# Run unit tests
-./test-models.sh
+# Development mode (web frontend only)
+just dev
 ```
 
 ### Manual Commands
 ```sh
-npm run dev          # Frontend development server
-npm run tauri dev    # Full Tauri development mode
-npm run build        # Production build
-npm run tauri build  # Tauri desktop build
+just build           # Full build pipeline
+just app            # Run native Tauri desktop application
+just dev            # Development mode (web frontend only)
+just test           # Run all tests
+just clean          # Clean all artifacts
 ```
 
 ## Testing
@@ -291,51 +290,34 @@ Successfully migrated from:
 
 ## Build Process Status
 
-### Current Issue: TypeScript Generation Not Automated
+### Current Implementation: ts-rs TypeScript Generation
 
-The build process has been documented but **the TypeScript generation step is not yet implemented**. Here's what was identified:
+The build process now uses **ts-rs 10.1** for stable TypeScript generation, replacing the previous specta-based approach.
 
-**What Exists:**
-- `generate_typescript_bindings()` function in main.rs runs automatically during debug builds
-- Reads Rust type annotations and command signatures  
-- Outputs TypeScript interfaces to `../src/lib/bindings.ts`
+**What Works:**
+- TypeScript bindings automatically generated from Rust types using `#[derive(TS)]` and `#[ts(export)]`
+- Build pipeline: `just build` handles all dependencies and type generation
+- Contract verification ensures TypeScript matches Rust type structures
+- Full integration between Rust backend and TypeScript frontend
 
-**The Problem:**
-- This only runs when the main app starts in debug mode
-- Package.json references `npm run generate-bindings` which doesn't exist yet
-- Need on-demand generation as part of the build process
-
-**The Solution (FINAL DESIGN):**
-Modify main.rs to support CLI-based TypeScript generation:
-1. Add CLI argument parsing to main.rs - check for `--generate-bindings` argument
-2. If flag present: call existing `generate_typescript_bindings()` function and `std::process::exit(0)`
-3. If no flag: continue with normal Tauri app startup
-4. Package.json calls `cargo run -- --generate-bindings`
-
-**Automated Build Process (INTENDED):**
+**Build Process:**
 ```bash
-npm run clean          # ✅ Delete ALL generated files  
-npm run generate-bindings  # ❌ FAILS - tauri-specta API issue
-npm run test:types     # ✅ Test against generated bindings
-npm run tauri:build    # ❌ Build using SAME bindings
+just clean             # Delete all generated files  
+just build             # Full build pipeline with type generation
+just verify-bindings   # Verify TypeScript matches Rust types
+just app              # Run native Tauri desktop application
 ```
 
-### Tasks To Complete
+### Architecture Complete
 
-**IMMEDIATE:**
-- [x] **Consolidate fragmented .md files** - Deleted: `NATIVE_APP_VALIDATION.md`, `TESTING.md`, `TESTING_SETUP.md`, `TYPE_SAFE_SETUP.md`, `TS_FIXES.md` (duplicate/outdated info)
-- [ ] **Fix tauri-specta API issue** - Add `specta-typescript` dependency and replace `tauri_specta::ts::export_with_cfg` with `builder.export(Typescript::default(), "../src/bindings.ts")` per RC.21 docs
-- [ ] **Add --generate-bindings CLI flag to main.rs** - Use existing `generate_typescript_bindings()` function, exit after generation  
-- [ ] **Update package.json generate-bindings command** - Change to `cargo run -- --generate-bindings`
-- [ ] **Test automated build process works end-to-end** - `npm run build` should work completely
-- [ ] **Verify tests and native app use identical generated bindings** - No more inconsistencies
+**TypeScript Generation:**
+- Uses ts-rs 10.1 for production-ready type generation
+- All types in mcp-core marked with `#[derive(TS), #[ts(export)]`
+- Generated bindings.ts contains real extracted types, not hardcoded strings
+- Contract verification prevents type drift between Rust and TypeScript
 
-**Once Complete:**
-- Tests and native app will use identical `src/lib/bindings.ts` file
-- No "works in tests but not native" inconsistencies  
-- Fully automated build process with no manual steps
-- Deterministic: Clean → Generate → Test → Build
-
-### Future: Auto-Generation
-
-When tauri-specta v2 stabilizes, replace manual `src/lib/bindings.ts` with auto-generated bindings. The architecture and tests will remain identical - only the generation method changes.
+**Build System:**
+- Just-based orchestration with dependency management
+- Fingerprint verification ensures consistency
+- Native app launch with `just app` command
+- Full integration testing and validation

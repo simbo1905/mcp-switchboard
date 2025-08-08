@@ -590,47 +590,7 @@ npm run check  # TypeScript checking only
   - **Dependencies**: Installs Node.js 20.x, Rust 1.88+, tauri-driver in isolated Linux environment
   - **Performance**: ~3-5 minutes setup time, reliable unattended installation
 
-## README-Driven Development (RDD) Roadmap
-
-### Current Development (GitHub Issues)
-
-**COMPLETED: Stable TypeScript type generation using ts-rs** ✅
-
-**SOLUTION IMPLEMENTED:** 
-- ✅ Removed all specta 2.0.0-rc.* and tauri-specta dependencies (incompatible with modern Tauri)
-- ✅ Implemented ts-rs 10.1 for stable, production-ready Rust → TypeScript type generation
-- ✅ Real automatic type extraction with `#[derive(TS)]` and `#[ts(export)]` macros
-- ✅ Generated TypeScript matches Rust structures exactly
-
-**DELIVERABLES COMPLETED:**
-- ✅ Working automatic type generation using ts-rs 10.1
-- ✅ No rc/beta dependencies - production-ready stable versions only
-- ✅ Clean build without specta-related warnings
-- ✅ Created SOLVED.md documenting the complete solution
-- ✅ All types automatically generated and verified with smoke tests
-
-**ARCHITECTURE:**
-- **mcp-core**: Types with `#[derive(TS)]` and `#[ts(export)]` 
-- **binding-generator**: Uses ts-rs to export all types and combine into single bindings.ts
-- **Build verification**: `just smoke-test-bindings` ensures TypeScript compilation succeeds
-- **Type safety**: Frontend and backend types guaranteed to match at compile time
-
-### Completed Architecture ✅
-
-**Shared Library Architecture & Build System:**
-- Multi-module workspace: mcp-core → binding-generator → mcp-switchboard-ui
-- Build fingerprinting system embedded in cargo build.rs scripts
-- Type-safe integration with manual TypeScript bindings
-- Just-based build orchestration with Maven-like dependency management
-- Water-tight system with dependency verification that cannot be bypassed
-
-**Security Foundation:**
-- Environment variable support for development
-- Encrypted config file storage with AES-256-GCM
-- Platform-appropriate config directories with machine-specific keys
-- Tauri filesystem permissions and config management API endpoints
-
-### Future Roadmap
+## Future Roadmap
 
 **Security Enhancements:**
 - [ ] System keychain integration (tauri-plugin-keyring)
