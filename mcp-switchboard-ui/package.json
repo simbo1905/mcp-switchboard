@@ -14,7 +14,8 @@
 		"test:watch": "vitest",
 		"test:coverage": "vitest run --coverage",
 		"inject-build-info": "node scripts/inject-build-info.js",
-		"postinstall": "npx just-install"
+		"postinstall": "npx just-install",
+		"tauri": "tauri"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^6.0.0",

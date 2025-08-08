@@ -9,8 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 mcp-core = { path = "../mcp-core" }
-tauri-specta = "2.0.0-rc.20"
-specta = "2.0.0-rc.20"
+ts-rs = "10.1"
 chrono = { version = "0.4", features = ["serde"] }
 serde_json = "1.0"
 

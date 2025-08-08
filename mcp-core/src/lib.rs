@@ -3,6 +3,7 @@ use futures::stream::{StreamExt, Stream};
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
 use std::pin::Pin;
+use ts_rs::TS;
 
 // Re-export everything needed by consumers
 pub use config::ConfigManager;
@@ -11,21 +12,24 @@ pub use build_info::{BuildInfo, DependencyInfo};
 mod config;
 mod build_info;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, TS)]
+#[ts(export)]
 pub struct ModelInfo {
     pub id: String,
     pub display_name: String,
     pub organization: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ApiError {
     pub message: String,
     pub code: Option<String>,
 }
 
 // Stream message types for pure streaming API
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, TS)]
+#[ts(export)]
 pub enum StreamMessage {
     Content(String),
     Error(String),
@@ -33,12 +37,14 @@ pub enum StreamMessage {
 }
 
 // Event payload types (for UI layer compatibility)
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export)]
 pub struct ChatStreamPayload {
     pub content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export)]
 pub struct ChatErrorPayload {
     pub error: String,
 }

@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Build information with embedded constants generated at compile time
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, TS)]
+#[ts(export)]
 pub struct BuildInfo {
     pub module: String,
     pub fingerprint: String,
@@ -11,7 +13,8 @@ pub struct BuildInfo {
     pub dependencies: Vec<DependencyInfo>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, TS)]
+#[ts(export)]
 pub struct DependencyInfo {
     pub module: String,
     pub fingerprint: String,

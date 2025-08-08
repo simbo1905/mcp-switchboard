@@ -123,10 +123,15 @@ validate:
     ./validate_just_idempotent_integrity.sh
     @echo "✅ Build integrity validated"
 
-# Development mode with file watching
+# Development mode with file watching (web frontend only)
 dev: generate-bindings
     @echo "🔥 Starting development mode..."
     cd mcp-switchboard-ui && npm run dev
+
+# Run native Tauri application
+app: generate-bindings
+    @echo "🚀 Starting native Tauri application..."
+    cd mcp-switchboard-ui && npm run tauri dev
 
 # Show module dependencies
 deps:

@@ -12,6 +12,7 @@
 declare global {
     interface Window {
         __TAURI__?: any;
+        __TAURI_INTERNALS__?: any;
     }
 }
 
@@ -51,8 +52,9 @@ const COMMAND_NAMES = {
     getBuildInfo: 'get_build_info'
 } as const;
 
-// Environment detection
-export const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined;
+// Environment detection - Tauri v2 detection
+export const isTauri = typeof window !== 'undefined' && 
+    (window.__TAURI__ !== undefined || window.__TAURI_INTERNALS__ !== undefined);
 
 /**
  * Type-safe wrapper around Tauri's invoke function
