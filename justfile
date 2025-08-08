@@ -17,6 +17,9 @@ clean:
     rm -rf mcp-switchboard-ui/dist/ || true
     rm -rf mcp-switchboard-ui/.svelte-kit/ || true
     rm -rf mcp-switchboard-ui/src/bindings.ts || true
+    # Clean browser testing artifacts
+    rm -rf target/test-screenshots/ || true
+    rm -f mcp-switchboard-ui/mock-api.pid || true
     # Clean Rust modules
     cd binding-generator && cargo clean
     cd mcp-core && cargo clean
@@ -96,11 +99,41 @@ build-ui: smoke-test-bindings
     @echo "✅ UI built"
     @[ -f /tmp/build-mcp-switchboard-ui.properties ] && grep -E "^(MODULE|FINGERPRINT|GIT_SHA|GIT_HEADLINE|BUILD_TIME)" /tmp/build-mcp-switchboard-ui.properties | sed 's/^/   /' || true
 
+# Build UI for browser testing (static output)
+build-ui-static: smoke-test-bindings
+    @echo "🖥️ Building UI for browser testing (static)..."
+    cd mcp-switchboard-ui && npm install && npm run build:static
+    @echo "✅ Static UI built for browser testing"
+
 # Test UI
 test-ui: build-ui
     @echo "🧪 Testing UI..."
     cd mcp-switchboard-ui && npm test
     @echo "✅ UI tests passed"
+
+# Browser testing with Puppeteer
+test-browser: generate-bindings build-ui-static
+    @echo "🌐 Starting browser tests..."
+    cd mcp-switchboard-ui && npm run test:browser
+    @echo "✅ Browser tests passed"
+
+# Browser testing with Tauri mocking
+test-browser-mock: generate-bindings build-ui-static
+    @echo "🌐 Running browser tests with Tauri mocking..."
+    cd mcp-switchboard-ui && npm run test:browser
+    @echo "✅ Browser tests with Tauri mocking completed"
+
+# Screenshot testing
+test-screenshots: generate-bindings build-ui-static
+    @echo "📸 Capturing screenshot baselines..."
+    cd mcp-switchboard-ui && SCREENSHOT_MODE=capture npm run test:browser
+    @echo "✅ Screenshots captured"
+
+# Spotlight-specific testing
+test-spotlight: generate-bindings build-ui-static
+    @echo "🔍 Testing spotlight search behavior..."
+    cd mcp-switchboard-ui && npm run test:browser -- --testNamePattern="spotlight"
+    @echo "✅ Spotlight tests completed"
 
 # Full build pipeline
 build: build-ui
@@ -114,7 +147,7 @@ build: build-ui
     done
 
 # Run all tests
-test: test-core test-ui
+test: test-core test-ui test-browser
     @echo "✅ All tests passed"
 
 # Validate build integrity and fingerprints
