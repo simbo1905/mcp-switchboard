@@ -30,8 +30,7 @@ vite.config.ts.timestamp-*
 *.log
 *.pid
 
-# Lima state and testing artifacts
-.lima-state/
+# Browser testing artifacts
 e2e-artifacts/
 test-all-artifacts/
 verify-artifacts/

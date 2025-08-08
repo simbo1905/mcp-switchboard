@@ -46,7 +46,6 @@ A secure Tauri desktop application providing a chat interface for streaming AI c
 - Node.js 18+ and npm
 - Rust 1.77.2+
 - Tauri CLI: `npm install -g @tauri-apps/cli`
-- Lima (for cross-platform testing): `brew install lima lima-additional-guestagents`
 
 ### Quick Start
 
@@ -103,26 +102,6 @@ npm run check  # TypeScript checking only
 just build     # Complete build pipeline with validation
 ```
 
-### Lima Testing Troubleshooting
-
-**Prerequisites Check:**
-```bash
-./lima-manager.sh status    # Check Lima installation and instance status
-limactl list               # View all Lima instances
-```
-
-**Common Issues:**
-- **Setup hangs**: Fixed in current version - uses reliable step-by-step installation
-- **Architecture mismatch**: Script auto-detects VZ/aarch64 on Apple Silicon, QEMU/x86_64 on Intel
-- **Dependency failures**: Each dependency installed separately with error handling
-- **Instance conflicts**: Use `./lima-manager.sh destroy` then `./lima-manager.sh setup` to start fresh
-
-**Manual Recovery:**
-```bash
-./lima-manager.sh destroy   # Remove broken instance
-./lima-manager.sh setup     # Clean setup with architecture detection
-./lima-manager.sh verify    # Confirm all dependencies installed
-```
 
 ## Debugging and Logging
 
@@ -236,6 +215,91 @@ mcp-switchboard/
 1. **mcp-core** contains all Tauri commands as a library - no Tauri app, just functions
 2. **binding-generator** imports mcp-core, uses tauri-specta to generate TypeScript from those commands, writes to file, exits
 3. **mcp-switchboard-ui** imports mcp-core AND the generated TypeScript bindings - full Tauri app
+
+## Testing Framework
+
+### Overview
+
+This project implements a layered testing approach designed to validate both functionality and user experience across multiple environments and contexts.
+
+### Layered Testing Architecture
+
+#### Layer 1: Unit Tests
+- **Rust Backend**: Cargo test framework for mcp-core business logic
+- **Frontend**: Vitest for component and utility function testing
+- **Coverage**: Individual function and component behavior validation
+
+#### Layer 2: Integration Tests  
+- **API Integration**: Mock backend responses for AI model endpoints
+- **TypeScript Contract**: Verification that generated bindings match Rust types
+- **Configuration**: Encrypted config loading and API key management flows
+
+#### Layer 3: Browser Testing (Planned)
+- **Framework**: Puppeteer for automated browser interaction
+- **Mock Backend**: Simulated Together.ai API responses for `/models` endpoint testing
+- **UI Validation**: Screenshot-based regression testing for visual components
+
+#### Layer 4: Manual Testing
+- **Native Development App**: Real Tauri backend with WebView frontend (`just app`)
+- **Cross-Platform Validation**: Manual testing across Windows/macOS/Linux
+- **End-to-End Workflows**: Complete user workflows from startup to API interaction
+
+### Browser Testing Strategy (Interactive UI Testing)
+
+**CRITICAL ISSUE**: The spotlight search feature has cursor jumping problems that make typing jittery and unusable. This requires comprehensive browser testing to identify, fix, and prevent regressions.
+
+**Testing Infrastructure:**
+- **Framework**: Puppeteer for automated browser interaction with realistic timing
+- **Mock Backend**: Express.js server serving Together.ai API endpoints for isolated testing  
+- **Screenshot Testing**: Visual regression detection with baseline comparison
+- **Folder Structure**: Organized testing assets under version control
+
+**Implementation Architecture:**
+```
+mcp-switchboard-ui/
+├── src/lib/testing/
+│   └── browser/               # Puppeteer test suites
+│       ├── mock-tauri.js      # Tauri command mocking layer
+│       ├── spotlight.test.js  # Spotlight behavior testing
+│       ├── startup.test.js    # App health verification
+│       └── utils/             # Testing utilities and helpers
+└── target/
+    └── test-screenshots/      # Screenshot storage (cleaned by just)
+        ├── baselines/         # Expected UI states
+        └── current/           # Latest test captures
+```
+
+**Tauri Command Mocking:**
+- Direct `window.__TAURI__` function mocking in browser context
+- Mock implementations for `get_available_models`, `has_api_config`, `set_preferred_model`
+- Simulated streaming responses using DOM events
+- No external HTTP server required
+
+**Mock State Management:**
+- Each test file has corresponding mock state file: `test-name.mock.js`
+- Mock files define specific Tauri command responses for that test scenario
+- Test-specific mocks injected via `page.evaluateOnNewDocument()`
+- Naming convention: `startup.test.js` → `startup.mock.js`, `spotlight.test.js` → `spotlight.mock.js`
+
+**Critical Test Scenarios:**
+1. **Cursor Stability**: Verify typing doesn't cause cursor jumping
+2. **Spotlight Activation**: `/` key opens spotlight smoothly
+3. **Navigation Flow**: Up/Down/ESC/ENTER keyboard handling
+4. **Model Filtering**: Real-time search with typing delays
+5. **Visual States**: Screenshot capture of all UI interactions
+
+**Browser Test Commands:**
+- `just test-browser` - Full browser test suite with Tauri mocking
+- `just test-browser-mock` - Browser tests with built frontend (same as test-browser)
+- `just test-screenshots` - Capture/compare visual states
+- `just test-spotlight` - Specific spotlight behavior testing
+
+**Testing Methodology - Sanity and Proof-of-Life:**
+1. **Always Boot Test**: Every test must boot the app and verify "proof of life" via console logs
+2. **Screenshot Bookends**: Take screenshot at start and end of every test
+3. **Visual Verification**: After test passes, manually inspect both screenshots to confirm not false positive
+4. **Console Log Validation**: Check for expected startup messages and absence of errors
+5. **Only Use `just` Commands**: Never run bare node/npm/cargo - always use `just` for repeatability
 
 ## Build System Architecture: Maven-Like Multi-Module Project
 
@@ -585,10 +649,10 @@ npm run check  # TypeScript checking only
 - **Backend**: Tauri 2.x with Rust (three-crate workspace)
 - **AI Integration**: Together.ai API via OpenAI-compatible client
 - **Config**: Encrypted JSON with AES-256-GCM
-- **Testing**: Lima VM with architecture auto-detection (VZ on Apple Silicon, QEMU on Intel)
-  - **Setup Process**: Automatically detects existing Lima default instance configuration
-  - **Dependencies**: Installs Node.js 20.x, Rust 1.88+, tauri-driver in isolated Linux environment
-  - **Performance**: ~3-5 minutes setup time, reliable unattended installation
+- **Testing**: Multi-layer approach from unit tests to browser E2E tests
+  - **Browser E2E**: Puppeteer with mocked Tauri backend for automated UI testing
+  - **Manual Testing**: Native development app for real-world validation
+  - **Screenshot Testing**: Visual regression detection with baseline comparison
 
 ## Future Roadmap
 
@@ -610,12 +674,101 @@ npm run check  # TypeScript checking only
 4. **Platform Integration**: Native OS security features
 5. **Development Security**: Separate dev/prod credential handling
 
+## RDD and TDD Development Process
+
+**Readme-Driven Development (RDD):** The README documents the intended solution and serves as the living project specification. Implementation follows the documented specification exactly.
+
+**Working Process:**
+- README documents what the system *should* do, not what it currently does
+- Checklists track work-in-progress and provide durable state across sessions
+- When regressions occur, tasks are simply unchecked and reworked
+- Completed checklists are pruned before merge - GitHub issues/PRs/commits are the system of record
+- Eventually specification and implementation converge, then move to GitHub issues for ongoing work
+
+**Quality Gates:** Features are only complete when specification matches implementation and all tests pass.
+
 ## Contributing
 
 1. Security changes require security review
 2. All config-related changes must update this README
 3. Test both development and production credential flows
 4. Document any new security implications
+
+## Interactive Browser Testing Implementation Checklist
+
+**RDD COMPLIANCE**: These tasks document the exact intended implementation. Each item must be completed before claiming the feature works. This checklist serves as the living specification.
+
+### Phase 1: Foundation Setup ✅ **CRITICAL PATH**
+- [ ] **Install Puppeteer framework**: `npm install --save-dev puppeteer express`
+- [ ] **Create testing folder structure**: `src/lib/testing/{browser,mock-api}/{test-files}`
+- [ ] **Set up screenshot storage**: `target/test-screenshots/{baselines,current}/`
+- [ ] **Configure headless/headed modes**: Environment-based browser launching
+
+### Phase 2: Tauri Command Mocking ✅ **CRITICAL PATH**  
+- [x] **Create mock Tauri bridge**: `mock-tauri.js` with `window.__TAURI__` implementation
+- [x] **Mock core commands**: `get_available_models`, `has_api_config`, `set_preferred_model`
+- [x] **Mock streaming responses**: Simulate chat streaming using DOM events
+- [ ] **Mock error conditions**: API failures, invalid responses, timeout scenarios
+- [ ] **Create test data**: Various model scenarios (empty, large, filtered)
+
+### Phase 3: App Health Verification ✅ **CRITICAL PATH**
+- [ ] **Startup health check**: Launch app, verify clean console logs
+- [ ] **API key flow testing**: Configure mock API key, verify UI updates
+- [ ] **Baseline screenshot capture**: Initial healthy app state documentation
+- [ ] **Console error detection**: Fail tests on TypeScript/runtime errors
+
+### Phase 4: Spotlight Search Core Testing ✅ **CRITICAL PATH**
+- [ ] **`/` key activation**: Verify smooth spotlight opening without glitches
+- [ ] **Cursor stability testing**: Type with delays, confirm no cursor jumping
+- [ ] **Up/Down navigation**: Arrow key suggestion traversal
+- [ ] **ESC exit behavior**: Close spotlight and clear input state
+- [ ] **ENTER selection**: Execute selected command properly
+- [ ] **Backspace editing**: Text modification without cursor issues
+
+### Phase 5: Model Search and Selection ✅ **CRITICAL PATH**
+- [ ] **Real-time filtering**: Type model names, verify suggestion updates
+- [ ] **Model selection flow**: Choose model via keyboard/mouse, confirm activation  
+- [ ] **Search performance**: Test with 100+ model fixture for responsiveness
+- [ ] **Filter edge cases**: Empty results, special characters, case sensitivity
+- [ ] **Visual feedback**: Highlight selected items, loading states
+
+### Phase 6: Just Command Integration ✅ **CRITICAL PATH**
+- [x] **`just test-browser`**: Run complete Puppeteer test suite with Tauri mocking
+- [x] **`just test-browser-mock`**: Browser tests with built frontend (same as above)
+- [ ] **`just test-screenshots`**: Capture and compare visual baselines
+- [ ] **`just test-spotlight`**: Focused spotlight behavior testing
+- [x] **Update `just clean`**: Remove `target/test-screenshots/` artifacts
+- [x] **Update `just test`**: Include browser tests in full test suite
+
+### Phase 7: Native App Verification ✅ **INTEGRATION REQUIREMENT**
+- [ ] **Background app launch**: `just app &` with PID tracking
+- [ ] **Info API call verification**: Monitor logs for expected backend calls
+- [ ] **UI behavior parity**: Confirm native app matches browser testing
+- [ ] **Startup logging**: Verify app health indicators in native mode
+
+### Phase 8: Issue Resolution ✅ **QUALITY GATE**
+- [ ] **Cursor jumping fix**: Identify and resolve Svelte reactivity issues
+- [ ] **Typing stability**: Implement proper input handling without cursor movement
+- [ ] **Performance optimization**: Ensure smooth typing with minimal delays
+- [ ] **Regression prevention**: Add specific tests for fixed cursor behavior
+
+### Phase 9: Final Validation ✅ **ACCEPTANCE CRITERIA**
+- [ ] **Clean build test**: `just clean && just build && just test-browser`
+- [ ] **Screenshot baseline validation**: Verify all captured states are correct
+- [ ] **Documentation updates**: Complete testing procedures and troubleshooting
+- [ ] **Repeatability verification**: Multiple clean test runs succeed consistently
+
+### Phase 10: Completion ✅ **DELIVERY**
+- [ ] **All tests passing**: Browser, native app, and integration tests
+- [ ] **Zero cursor jumping**: Smooth typing experience verified
+- [ ] **Full just integration**: All commands working and documented
+- [ ] **Remove this checklist**: Only when all functionality is proven working
+
+**QUALITY GATES**: 
+- No phase marked complete unless all items in that phase work
+- Cursor jumping must be completely resolved before Phase 8 completion
+- Native app must demonstrate same behavior as browser tests
+- All `just` commands must be reliable and repeatable
 
 ## License
 

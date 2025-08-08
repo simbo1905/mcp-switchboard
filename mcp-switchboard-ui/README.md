@@ -62,68 +62,40 @@ This project follows a Maven-style test architecture with fast local tests and s
 ./test-everything.sh
 
 # This ONE script will:
-# 1. Check macOS compatibility
-# 2. Install Lima + guest agents if missing
-# 3. Clean up any broken Lima instances
-# 4. Run fast local tests
-# 5. Setup Lima environment
-# 6. Run full Linux E2E tests
-# 7. Give clear success/failure messages
+# 1. Check dependencies
+# 2. Run unit tests
+# 3. Run browser E2E tests  
+# 4. Give clear success/failure messages
 ```
 
 ### Development Testing
 
 ```bash
-# Fast local tests only (no Lima required)
+# Fast unit tests only
 npm test
 
-# Full test suite (local + Linux E2E)
-npm run verify
+# Browser E2E tests with mocked backend
+just test-browser
+
+# Full test suite (unit + browser E2E)
+just test
 ```
 
 ### Test Architecture
 
-#### Fast Tests (`npm test`)
+#### Unit Tests (`npm test`)
 - Frontend unit tests (Vitest)
-- Backend unit tests (Cargo)
+- Backend unit tests (Cargo) 
 - Runs in < 30 seconds
 - No external dependencies
 - Run this during development
 
-#### Integration Tests (`npm run verify`)
-- Includes all fast tests
-- Linux E2E tests via Lima VM
-- WebDriver UI tests
-- Takes 2-5 minutes
+#### Browser E2E Tests (`just test-browser`)
+- Puppeteer with mocked Tauri backend
+- Screenshot-based validation
+- UI interaction testing
+- Takes 1-2 minutes
 - Run before commits/PRs
-
-### Lima Management
-
-Lima is used to test Linux builds on macOS:
-
-```bash
-# One-time setup
-npm run lima:setup
-
-# Verify Lima is working
-npm run lima:verify  
-
-# Remove Lima instance
-npm run lima:destroy
-```
-
-### Troubleshooting
-
-If `npm run verify` fails with Lima errors:
-
-1. Check Lima status: `npm run lima:verify`
-2. If not setup: `npm run lima:setup`
-3. Check logs: `cat .lima-state/lima-manager.log`
-4. Force restart: `npm run lima:destroy && npm run lima:setup`
-
-### CI/CD
-
-GitHub Actions runs `npm run verify` on all PRs. The CI environment handles Lima setup automatically.
 
 ### Configuration
 - **Development**: Set `TOGETHERAI_API_KEY` environment variable
